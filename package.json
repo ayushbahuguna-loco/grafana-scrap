@@ -1,0 +1,21 @@
+{
+  "name": "grafana-metrics-extraction-tool",
+  "version": "1.0.0",
+  "description": "Fetch API latency metrics from Grafana/Prometheus and update a CSV file.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "check": "node --check config/config.js && node --check src/grafanaClient.js && node --check src/csvReader.js && node --check src/csvWriter.js && node --check src/metricsCalculator.js && node --check src/main.js"
+  },
+  "keywords": [
+    "grafana",
+    "prometheus",
+    "csv",
+    "metrics"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7"
+  }
+}
