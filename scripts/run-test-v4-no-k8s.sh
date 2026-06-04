@@ -28,7 +28,7 @@ machine_host() {
 # Load Test Config
 # =========================
 
-SCRIPT_VERSION="flow_43_v1"
+SCRIPT_VERSION="flow_12_v1_no_k8s"
 DEFAULT_DURATION="${DEFAULT_DURATION:-30s}"
 RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-30s}"
 STREAM_UID="${STREAM_UID:-fcdbc789-9c87-4cee-840e-688ed2589fc3}"
@@ -41,13 +41,13 @@ STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
 # CHANGE ME: set the single flow name here.
 # Example: use `chat` for flow 12, or `flow_43` for flow 43.
 FLOW_NAMES=(
-  flow_42
+  flow_12   
 )
 
 # CHANGE ME: set the matching flow id here.
 # Example: use `12` for chat, or `43` for flow_43.
 FLOW_IDS=(
-42
+12
 )
 
 # TARGET_RPS is HTTP requests started/sec for the flow, not flow executions/sec.
@@ -55,7 +55,7 @@ FLOW_IDS=(
 # CHANGE ME: set the default RPS after `:-`.
 # Example: `${FLOW_43_TARGET_RPS:-600}` runs at 600 RPS unless FLOW_43_TARGET_RPS is provided.
 FLOW_TARGET_RPS=(
-  "${FLOW_42_TARGET_RPS:-9000}"
+  "${FLOW_12_TARGET_RPS:-9000}"
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
@@ -67,7 +67,9 @@ RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
 METRICS_DIR="results/$RUN_ID/instance-metrics"
 K8S_METRICS_DIR="results/$RUN_ID/k8s-cluster-metrics"
 REPORT_CSV_DIR="results/$RUN_ID/summary-csv"
-COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-true}"
+# No-K8S clone: keep this hard-disabled so the script does not SSH into
+# K8S_SSH_HOST (`my-machine` by default) through scripts/k8s-cluster-metrics.sh.
+COLLECT_K8S_METRICS="false"
 GENERATE_CSV_REPORT="${GENERATE_CSV_REPORT:-true}"
 CLEANUP_DONE=0
 METRICS_ATTEMPTED=0

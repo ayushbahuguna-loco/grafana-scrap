@@ -28,7 +28,7 @@ machine_host() {
 # Load Test Config
 # =========================
 
-SCRIPT_VERSION="flow_43_v1"
+SCRIPT_VERSION="api_coverage_v1_no_k8s"
 DEFAULT_DURATION="${DEFAULT_DURATION:-30s}"
 RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-30s}"
 STREAM_UID="${STREAM_UID:-fcdbc789-9c87-4cee-840e-688ed2589fc3}"
@@ -38,28 +38,126 @@ STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
 # script passes LOAD_GENERATORS and LOAD_GENERATOR_INDEX so each target is split
 # across MACHINES. Do not divide TARGET_RPS manually per machine.
 #
-# CHANGE ME: set the single flow name here.
-# Example: use `chat` for flow 12, or `flow_43` for flow 43.
+# Flow 7 is still split into focused flows here because the bundled flow had
+# 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
+# low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
-  flow_42
+  device_profile
+  google_signin_after_device_profile
+  username_hai_kya_after_signup
+  refresh_token_after_signup
+  me_profile_after_signup
+  ivory_config_after_signup
+  profile_info_after_signup
+  feed_v4
+  wallet_all
+  categories_listed
+  sidenav
+  sub_recipe_web_videos_global
+  sub_recipe_streamer_profile_v2
+  sub_recipe_web_home_global
+  profile_me_permissions
+  stream_detail_v2
+  stream_me_v2
+  stream_playback_v2
+  stream_playback_v1
+  sticker_tabs_all
+  sticker_all
+  rewards
+  quests
+  profile_followee
+  profile_streams
+  chat
 )
 
-# CHANGE ME: set the matching flow id here.
-# Example: use `12` for chat, or `43` for flow_43.
 FLOW_IDS=(
 42
+43
+72
+70
+44
+45
+46
+69
+53
+64
+65
+66
+67
+68
+63
+11
+59
+10
+58
+54
+55
+57
+56
+61
+62
+12
+# 34 // Ignore bundle id for now
 )
 
 # TARGET_RPS is HTTP requests started/sec for the flow, not flow executions/sec.
 # Bundled flows multiply desired per-API RPS by the API calls per execution.
-# CHANGE ME: set the default RPS after `:-`.
-# Example: `${FLOW_43_TARGET_RPS:-600}` runs at 600 RPS unless FLOW_43_TARGET_RPS is provided.
 FLOW_TARGET_RPS=(
-  "${FLOW_42_TARGET_RPS:-9000}"
+  2667
+  5334
+  8001
+  8001
+  8001
+  8001
+  8001
+  2667
+  2667
+  2667
+  2667
+  2667
+  1867
+  1333
+  2667
+  2667
+  2667
+  2667
+  533
+  2667
+  2667
+  533
+  533
+  1067
+  1067
+  100
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
   0
 )
 
@@ -67,7 +165,9 @@ RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
 METRICS_DIR="results/$RUN_ID/instance-metrics"
 K8S_METRICS_DIR="results/$RUN_ID/k8s-cluster-metrics"
 REPORT_CSV_DIR="results/$RUN_ID/summary-csv"
-COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-true}"
+# No-K8S clone: keep this hard-disabled so the script does not SSH into
+# K8S_SSH_HOST (`my-machine` by default) through scripts/k8s-cluster-metrics.sh.
+COLLECT_K8S_METRICS="false"
 GENERATE_CSV_REPORT="${GENERATE_CSV_REPORT:-true}"
 CLEANUP_DONE=0
 METRICS_ATTEMPTED=0

@@ -39,8 +39,8 @@ STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
 # across MACHINES. Do not divide TARGET_RPS manually per machine.
 #
 # Flow 7 is still split into focused flows here because the bundled flow had
-# 500/503 noise in previous runs. Chat flow 12 is excluded because it is not a
-# clean exact-RPS flow in mode=rps.
+# 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
+# low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
   device_profile
   google_signin_after_device_profile
@@ -67,6 +67,7 @@ FLOW_NAMES=(
   quests
   profile_followee
   profile_streams
+  chat
 )
 
 FLOW_IDS=(
@@ -95,7 +96,7 @@ FLOW_IDS=(
 56
 61
 62
-# 12 // Chat disabled for sometime
+12
 # 34 // Ignore bundle id for now
 )
 
@@ -127,10 +128,12 @@ FLOW_TARGET_RPS=(
   533
   1067
   1067
+  100
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
+  0
   0
   0
   0
