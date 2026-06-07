@@ -31,8 +31,8 @@ machine_host() {
 SCRIPT_VERSION="api_coverage_v1"
 DEFAULT_DURATION="${DEFAULT_DURATION:-30s}"
 RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-30s}"
-STREAM_UID="${STREAM_UID:-fcdbc789-9c87-4cee-840e-688ed2589fc3}"
-STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
+STREAM_UID="${STREAM_UID:-65ebad15-ee94-400c-ab33-d97d4b42d751}"
+STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # These are total scenario targets for the full load-generator fleet. The
 # script passes LOAD_GENERATORS and LOAD_GENERATOR_INDEX so each target is split
@@ -41,114 +41,48 @@ STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
 # Flow 7 is still split into focused flows here because the bundled flow had
 # 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
 # low target because it is not a clean exact-RPS flow in mode=rps.
+# low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
-  device_profile
-  google_signin_after_device_profile
-  username_hai_kya_after_signup
-  refresh_token_after_signup
-  me_profile_after_signup
-  ivory_config_after_signup
-  profile_info_after_signup
-  feed_v4
-  wallet_all
-  categories_listed
-  sidenav
-  sub_recipe_web_videos_global
-  sub_recipe_streamer_profile_v2
-  sub_recipe_web_home_global
-  profile_me_permissions
-  stream_detail_v2
-  stream_me_v2
-  stream_playback_v2
-  stream_playback_v1
-  sticker_tabs_all
-  sticker_all
-  rewards
-  quests
-  profile_followee
-  profile_streams
-  chat
+    auth_pre_soak
+    auth_burst
+    feed_pre_soak
+    feed_burst
+    stream_pre_soak
+    stream_burst
+    chat_pre_soak
+    chat_burst
+    quest_rewards_pre_soak
+    quest_rewards_burst
 )
 
 FLOW_IDS=(
-42
-43
-72
-70
-44
-45
-46
-69
-53
-64
-65
-66
-67
-68
-63
-11
-59
-10
-58
-54
-55
-57
-56
-61
-62
-12
-# 34 // Ignore bundle id for now
+    76
+    76
+    77
+    77
+    78
+    78
+    79
+    79
+    80
+    80
 )
 
-# TARGET_RPS is HTTP requests started/sec for the flow, not flow executions/sec.
-# Bundled flows multiply desired per-API RPS by the API calls per execution.
 FLOW_TARGET_RPS=(
-  2667
-  5334
-  8001
-  8001
-  8001
-  8001
-  8001
-  2667
-  2667
-  2667
-  2667
-  2667
-  1867
-  1333
-  2667
-  2667
-  2667
-  2667
-  533
-  2667
-  2667
-  533
-  533
-  1067
-  1067
-  100
+    30
+    9333
+    30
+    10666
+    30
+    8000
+    30
+    4000
+    30
+    533
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
   0
   0
   0
@@ -172,9 +106,9 @@ METRICS_ATTEMPTED=0
 K8S_METRICS_ATTEMPTED=0
 
 MACHINES=(
-  turkey-01
-  turkey-02
-  turkey-03
+  brazil-01
+  brazil-02
+  brazil-03
 )
 
 LOAD_GENERATORS="${#MACHINES[@]}"

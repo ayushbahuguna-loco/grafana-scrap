@@ -29,10 +29,10 @@ machine_host() {
 # =========================
 
 SCRIPT_VERSION="api_coverage_v1_no_k8s"
-DEFAULT_DURATION="${DEFAULT_DURATION:-30s}"
-RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-30s}"
-STREAM_UID="${STREAM_UID:-fcdbc789-9c87-4cee-840e-688ed2589fc3}"
-STREAMER_UID="${STREAMER_UID:-6SBJLZTSSB}"
+DEFAULT_DURATION="${DEFAULT_DURATION:-60s}"
+RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-60s}"
+STREAM_UID="${STREAM_UID:-58777577-02a3-43b9-83a9-47368563caad}"
+STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # These are total scenario targets for the full load-generator fleet. The
 # script passes LOAD_GENERATORS and LOAD_GENERATOR_INDEX so each target is split
@@ -46,24 +46,29 @@ FLOW_NAMES=(
     feed
     stream
     chat
+    quest_rewards
 )
 
 FLOW_IDS=(
     76
     77
     78
-    12
+    79
+    80
 )
 
 FLOW_TARGET_RPS=(
-    9000
-    6000
+    9333
+    10666
+    8000
     4000
-    2000
+    333
+    533
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
+  0
   0
   0
   0
@@ -83,7 +88,7 @@ METRICS_ATTEMPTED=0
 K8S_METRICS_ATTEMPTED=0
 
 MACHINES=(
-  turkey-01
+  brazil-01
   turkey-02
   turkey-03
 )
@@ -232,7 +237,7 @@ do
     if sshpass -p "$password" \
         ssh \
         -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=10 \
+        -o ConnectTimeout=30 \
         root@"$host" \
         "hostname" >/dev/null
     then
