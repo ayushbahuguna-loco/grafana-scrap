@@ -11,12 +11,17 @@ REMOTE_DIR="${REMOTE_DIR:-~/load-test}"
 REMOTE_METRICS_DIR="${REMOTE_METRICS_DIR:-~/load-test/metrics}"
 LOCAL_METRICS_DIR="${LOCAL_METRICS_DIR:-results/$METRICS_RUN_ID/instance-metrics}"
 DSTAT_COMMAND="${DSTAT_COMMAND:-dstat -tcmn --tcp --top-cpu --top-mem 1}"
+SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-30}"
+SSH_ATTEMPTS="${SSH_ATTEMPTS:-5}"
+SSH_RETRY_DELAY_SECONDS="${SSH_RETRY_DELAY_SECONDS:-5}"
+METRICS_PARALLEL="${METRICS_PARALLEL:-false}"
 
 machine_host() {
     case "$1" in
         brazil-01) printf '%s\n' '130.94.106.105' ;;
         brazil-02) printf '%s\n' '130.94.107.80' ;;
         brazil-03) printf '%s\n' '130.94.107.139' ;;
+        brazil-04) printf '%s\n' '130.94.106.176' ;;
         philippines-01) printf '%s\n' '38.60.246.239' ;;
         philippines-02) printf '%s\n' '38.54.36.76' ;;
         philippines-03) printf '%s\n' '38.54.87.127' ;;
@@ -32,6 +37,7 @@ DEFAULT_MACHINES=(
   brazil-01
   brazil-02
   brazil-03
+  brazil-04
 )
 
 if [ -n "${MACHINES_OVERRIDE:-}" ]; then
@@ -63,8 +69,10 @@ Examples:
   watch -n 5 './scripts/instance-metrics.sh status'
 
 Overrides:
-  MACHINES_OVERRIDE="brazil-01 brazil-02" ./scripts/instance-metrics.sh run
+  MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03 brazil-04" ./scripts/instance-metrics.sh run
   DSTAT_COMMAND="dstat -tcmn --tcp --top-cpu --top-mem 1" ./scripts/instance-metrics.sh start
+  SSH_ATTEMPTS=5 SSH_RETRY_DELAY_SECONDS=5 ./scripts/instance-metrics.sh start
+  METRICS_PARALLEL=true ./scripts/instance-metrics.sh start
 EOF
 }
 
@@ -85,6 +93,29 @@ remote_pid_file() {
     printf '%s/dstat_%s_%s.pid' "$REMOTE_METRICS_DIR" "$METRICS_RUN_ID" "$machine"
 }
 
+retry_command() {
+    label="$1"
+    shift
+
+    attempt=1
+    while [ "$attempt" -le "$SSH_ATTEMPTS" ]
+    do
+        if "$@"; then
+            return 0
+        fi
+
+        status=$?
+        if [ "$attempt" -eq "$SSH_ATTEMPTS" ]; then
+            echo "$label failed after $SSH_ATTEMPTS attempts"
+            return "$status"
+        fi
+
+        echo "$label failed on attempt $attempt/$SSH_ATTEMPTS; retrying in ${SSH_RETRY_DELAY_SECONDS}s"
+        sleep "$SSH_RETRY_DELAY_SECONDS"
+        attempt=$((attempt + 1))
+    done
+}
+
 ssh_machine() {
     machine="$1"
     shift
@@ -96,10 +127,14 @@ ssh_machine() {
         return 1
     fi
 
-    sshpass -p "$password" \
+    retry_command "[$machine] ssh" \
+        sshpass -p "$password" \
         ssh \
         -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=10 \
+        -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" \
+        -o PreferredAuthentications=password \
+        -o PubkeyAuthentication=no \
+        -o NumberOfPasswordPrompts=1 \
         root@"$host" \
         "$@"
 }
@@ -116,42 +151,65 @@ scp_from_machine() {
         return 1
     fi
 
-    sshpass -p "$password" \
+    retry_command "[$machine] scp" \
+        sshpass -p "$password" \
         scp \
         -o StrictHostKeyChecking=no \
+        -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" \
+        -o PreferredAuthentications=password \
+        -o PubkeyAuthentication=no \
+        -o NumberOfPasswordPrompts=1 \
         root@"$host":"$remote_file" \
         "$local_dir/"
+}
+
+start_metric_machine() {
+    machine="$1"
+    log_file="$(remote_log_file "$machine")"
+    pid_file="$(remote_pid_file "$machine")"
+
+    echo "[$machine] starting dstat"
+    ssh_machine "$machine" "
+        mkdir -p $REMOTE_METRICS_DIR
+        if ! command -v dstat >/dev/null 2>&1; then
+            echo 'dstat not found' > $log_file
+            exit 1
+        fi
+        if [ -f $pid_file ] && kill -0 \$(cat $pid_file) >/dev/null 2>&1; then
+            echo 'dstat already running with pid '\$(cat $pid_file)
+            exit 0
+        fi
+        BUFFER_PREFIX=''
+        if command -v stdbuf >/dev/null 2>&1; then
+            BUFFER_PREFIX='stdbuf -oL -eL'
+        fi
+        nohup sh -c \"\$BUFFER_PREFIX $DSTAT_COMMAND\" > $log_file 2>&1 &
+        echo \$! > $pid_file
+        echo 'started pid '\$(cat $pid_file)
+    "
 }
 
 start_metrics() {
     echo "Starting instance metrics: METRICS_RUN_ID=$METRICS_RUN_ID"
     echo "DSTAT_COMMAND=$DSTAT_COMMAND"
+    echo "SSH_ATTEMPTS=$SSH_ATTEMPTS SSH_RETRY_DELAY_SECONDS=$SSH_RETRY_DELAY_SECONDS METRICS_PARALLEL=$METRICS_PARALLEL"
+
+    if [ "$METRICS_PARALLEL" != "true" ]; then
+        status=0
+        for machine in "${MACHINES[@]}"
+        do
+            if ! start_metric_machine "$machine"; then
+                status=1
+            fi
+        done
+
+        return "$status"
+    fi
 
     pids=()
     for machine in "${MACHINES[@]}"
     do
-        log_file="$(remote_log_file "$machine")"
-        pid_file="$(remote_pid_file "$machine")"
-
-        echo "[$machine] starting dstat"
-        ssh_machine "$machine" "
-            mkdir -p $REMOTE_METRICS_DIR
-            if ! command -v dstat >/dev/null 2>&1; then
-                echo 'dstat not found' > $log_file
-                exit 1
-            fi
-            if [ -f $pid_file ] && kill -0 \$(cat $pid_file) >/dev/null 2>&1; then
-                echo 'dstat already running with pid '\$(cat $pid_file)
-                exit 0
-            fi
-            BUFFER_PREFIX=''
-            if command -v stdbuf >/dev/null 2>&1; then
-                BUFFER_PREFIX='stdbuf -oL -eL'
-            fi
-            nohup sh -c \"\$BUFFER_PREFIX $DSTAT_COMMAND\" > $log_file 2>&1 &
-            echo \$! > $pid_file
-            echo 'started pid '\$(cat $pid_file)
-        " &
+        start_metric_machine "$machine" &
         pids+=("$!")
     done
 

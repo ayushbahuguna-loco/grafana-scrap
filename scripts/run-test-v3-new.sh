@@ -29,10 +29,10 @@ machine_host() {
 # Load Test Config
 # =========================
 
-SCRIPT_VERSION="api_coverage_v1_no_k8s"
-DEFAULT_DURATION="${DEFAULT_DURATION:-600s}"
-RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-20s}"
-STREAM_UID="${STREAM_UID:-58777577-02a3-43b9-83a9-47368563caad}"
+SCRIPT_VERSION="api_coverage_v1"
+DEFAULT_DURATION="${DEFAULT_DURATION:-120s}"
+RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-30s}"
+STREAM_UID="${STREAM_UID:-65ebad15-ee94-400c-ab33-d97d4b42d751}"
 STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # These are total scenario targets for the full load-generator fleet. The
@@ -42,30 +42,22 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 # Flow 7 is still split into focused flows here because the bundled flow had
 # 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
 # low target because it is not a clean exact-RPS flow in mode=rps.
+# low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
-    stream_pre_soak
-    stream_burst
-    stream_soak
-
+    feed_pre_soak
 )
 
 FLOW_IDS=(
-    78
-    78
-    78
-
+    77
 )
 
 FLOW_TARGET_RPS=(
-    2666
-    8000
-    800
+    30
+    # 9333
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
-  0
-  0
   0
 )
 
@@ -73,9 +65,7 @@ RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
 METRICS_DIR="results/$RUN_ID/instance-metrics"
 K8S_METRICS_DIR="results/$RUN_ID/k8s-cluster-metrics"
 REPORT_CSV_DIR="results/$RUN_ID/summary-csv"
-# No-K8S clone: keep this hard-disabled so the script does not SSH into
-# K8S_SSH_HOST (`my-machine` by default) through scripts/k8s-cluster-metrics.sh.
-COLLECT_K8S_METRICS="false"
+COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-true}"
 GENERATE_CSV_REPORT="${GENERATE_CSV_REPORT:-true}"
 CLEANUP_DONE=0
 METRICS_ATTEMPTED=0

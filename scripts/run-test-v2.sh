@@ -17,6 +17,7 @@ declare -A DURATION
 HOSTS["brazil-01"]="130.94.106.105"
 HOSTS["brazil-02"]="130.94.107.80"
 HOSTS["brazil-03"]="130.94.107.139"
+HOSTS["brazil-04"]="130.94.106.176"
 
 HOSTS["philippines-01"]="38.60.246.239"
 HOSTS["philippines-02"]="38.54.36.76"
@@ -33,6 +34,7 @@ HOSTS["turkey-03"]="38.60.255.75"
 FLOW_IDS["brazil-01"]=42
 FLOW_IDS["brazil-02"]=42
 FLOW_IDS["brazil-03"]=42
+FLOW_IDS["brazil-04"]=42
 
 FLOW_IDS["philippines-01"]=42
 FLOW_IDS["philippines-02"]=42
@@ -45,6 +47,7 @@ FLOW_IDS["turkey-03"]=42
 TARGET_RPS["brazil-01"]=1900
 TARGET_RPS["brazil-02"]=1900
 TARGET_RPS["brazil-03"]=1900
+TARGET_RPS["brazil-04"]=1900
 
 TARGET_RPS["philippines-01"]=1200
 TARGET_RPS["philippines-02"]=1200
@@ -57,6 +60,7 @@ TARGET_RPS["turkey-03"]=1200
 RPS_WORKERS["brazil-01"]=4800
 RPS_WORKERS["brazil-02"]=4800
 RPS_WORKERS["brazil-03"]=4800
+RPS_WORKERS["brazil-04"]=4800
 
 RPS_WORKERS["philippines-01"]=3600
 RPS_WORKERS["philippines-02"]=3600
@@ -69,6 +73,7 @@ RPS_WORKERS["turkey-03"]=3600
 DURATION["brazil-01"]="30s"
 DURATION["brazil-02"]="30s"
 DURATION["brazil-03"]="30s"
+DURATION["brazil-04"]="30s"
 
 DURATION["philippines-01"]="30s"
 DURATION["philippines-02"]="30s"
@@ -90,6 +95,7 @@ MACHINES=(
   brazil-01
   brazil-02
   brazil-03
+  brazil-04
 )
 
 # =========================

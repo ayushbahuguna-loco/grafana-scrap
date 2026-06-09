@@ -31,8 +31,8 @@ machine_host() {
 
 SCRIPT_VERSION="api_coverage_v1_no_k8s"
 DEFAULT_DURATION="${DEFAULT_DURATION:-600s}"
-RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-20s}"
-STREAM_UID="${STREAM_UID:-58777577-02a3-43b9-83a9-47368563caad}"
+RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-10s}"
+STREAM_UID="${STREAM_UID:-e2c4c964-31b3-424e-a7c0-7a22a65a3bba}"
 STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # These are total scenario targets for the full load-generator fleet. The
@@ -43,23 +43,61 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 # 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
 # low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
+    auth_pre_soak
+    auth_burst
+    auth_soak
+    feed_pre_soak
+    feed_burst
+    feed_soak
     stream_pre_soak
     stream_burst
     stream_soak
-
+    chat_pre_soak
+    chat_burst
+    chat_soak
+    quest_rewards_pre_soak
+    quest_rewards_burst
+    quest_rewards_soak
 )
 
 FLOW_IDS=(
+    76
+    76
+    76
+    77
+    77
+    77
     78
     78
     78
-
+    79
+    79
+    79
+    80
+    80
+    80
 )
 
 FLOW_TARGET_RPS=(
-    2666
-    8000
-    800
+    1750
+    5250
+    525
+    #
+    1500
+    4500
+    450
+    #
+    1500
+    4500
+    450
+    #
+    750
+    2250
+    225
+    #
+    100
+    300
+    30
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
@@ -67,6 +105,37 @@ FLOW_RPS_WORKERS=(
   0
   0
   0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+  0
+)
+
+# Duration for each flow, aligned by index with FLOW_NAMES/FLOW_IDS.
+FLOW_DURATIONS=(
+  180s
+  60s
+  600s
+  1800s
+  60s
+  600s
+  180s
+  60s
+  600s
+  180s
+  60s
+  600s
+  180s
+  60s
+  600s
 )
 
 RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
@@ -82,10 +151,9 @@ METRICS_ATTEMPTED=0
 K8S_METRICS_ATTEMPTED=0
 
 MACHINES=(
-  brazil-01
-  brazil-02
-  brazil-03
-  brazil-04
+    turkey-01
+    turkey-02
+    turkey-03
 )
 
 LOAD_GENERATORS="${#MACHINES[@]}"
@@ -154,7 +222,8 @@ trap 'cleanup_metrics 143' TERM
 
 echo "===================================="
 echo "RUN_ID=$RUN_ID"
-echo "Duration=$DEFAULT_DURATION"
+echo "DefaultDuration=$DEFAULT_DURATION"
+echo "FlowDurations=${FLOW_DURATIONS[*]}"
 echo "StreamUID=$STREAM_UID"
 echo "StreamerUID=$STREAMER_UID"
 echo "Instance metrics will be saved under:"
@@ -191,13 +260,15 @@ fi
 
 if [ "${#FLOW_NAMES[@]}" -ne "${#FLOW_IDS[@]}" ] || \
     [ "${#FLOW_TARGET_RPS[@]}" -ne "${#FLOW_IDS[@]}" ] || \
-    [ "${#FLOW_RPS_WORKERS[@]}" -ne "${#FLOW_IDS[@]}" ]
+    [ "${#FLOW_RPS_WORKERS[@]}" -ne "${#FLOW_IDS[@]}" ] || \
+    [ "${#FLOW_DURATIONS[@]}" -ne "${#FLOW_IDS[@]}" ]
 then
     echo "Flow config length mismatch:"
     echo "  FLOW_NAMES=${#FLOW_NAMES[@]}"
     echo "  FLOW_IDS=${#FLOW_IDS[@]}"
     echo "  FLOW_TARGET_RPS=${#FLOW_TARGET_RPS[@]}"
     echo "  FLOW_RPS_WORKERS=${#FLOW_RPS_WORKERS[@]}"
+    echo "  FLOW_DURATIONS=${#FLOW_DURATIONS[@]}"
     exit 1
 fi
 
@@ -206,13 +277,15 @@ do
     if [ -z "${FLOW_NAMES[$flow_index]}" ] || \
         [ -z "${FLOW_IDS[$flow_index]}" ] || \
         [ -z "${FLOW_TARGET_RPS[$flow_index]}" ] || \
-        [ -z "${FLOW_RPS_WORKERS[$flow_index]}" ]
+        [ -z "${FLOW_RPS_WORKERS[$flow_index]}" ] || \
+        [ -z "${FLOW_DURATIONS[$flow_index]}" ]
     then
         echo "Flow config has an empty value at index $flow_index"
         echo "  name=${FLOW_NAMES[$flow_index]}"
         echo "  id=${FLOW_IDS[$flow_index]}"
         echo "  target_rps=${FLOW_TARGET_RPS[$flow_index]}"
         echo "  rps_workers=${FLOW_RPS_WORKERS[$flow_index]}"
+        echo "  duration=${FLOW_DURATIONS[$flow_index]}"
         exit 1
     fi
 done
@@ -278,10 +351,11 @@ do
     flow_id="${FLOW_IDS[$flow_index]}"
     target_rps="${FLOW_TARGET_RPS[$flow_index]}"
     rps_workers="${FLOW_RPS_WORKERS[$flow_index]}"
+    duration="${FLOW_DURATIONS[$flow_index]}"
 
     echo ""
     echo "===================================="
-    echo "Starting flow=$flow_name flow_id=$flow_id target_rps=$target_rps"
+    echo "Starting flow=$flow_name flow_id=$flow_id target_rps=$target_rps duration=$duration"
     echo "===================================="
 
     pids=()
@@ -304,11 +378,12 @@ do
         log_file="loadtest_${flow_run_id}.log"
         summary_file="summary_${flow_run_id}.txt"
 
-        echo "[$machine][$flow_name] FlowID=$flow_id TargetRPS=$target_rps"
+        echo "[$machine][$flow_name] FlowID=$flow_id TargetRPS=$target_rps Duration=$duration"
 
         sshpass -p "$password" \
         ssh \
         -o StrictHostKeyChecking=no \
+        -o ConnectTimeout=30 \
         root@"$host" "
             cd ~/load-test || exit 1
 
@@ -323,7 +398,7 @@ do
             echo 'FlowID=$flow_id' >> \$SUMMARY_FILE
             echo 'TargetRPS=$target_rps' >> \$SUMMARY_FILE
             echo 'Workers=$rps_workers' >> \$SUMMARY_FILE
-            echo 'Duration=$DEFAULT_DURATION' >> \$SUMMARY_FILE
+            echo 'Duration=$duration' >> \$SUMMARY_FILE
             echo 'LoadGenerators=$LOAD_GENERATORS' >> \$SUMMARY_FILE
             echo 'LoadGeneratorIndex=$machine_index' >> \$SUMMARY_FILE
             echo 'StreamUID=$STREAM_UID' >> \$SUMMARY_FILE
@@ -350,7 +425,7 @@ do
             FLOW_ID=$flow_id \
             TARGET_RPS=$target_rps \
             RPS_WORKERS=$rps_workers \
-            DURATION=$DEFAULT_DURATION \
+            DURATION=$duration \
             LOAD_GENERATORS=$LOAD_GENERATORS \
             LOAD_GENERATOR_INDEX=$machine_index \
             RPS_DRAIN_TIMEOUT=$RPS_DRAIN_TIMEOUT \
@@ -372,6 +447,7 @@ do
         if sshpass -p "$password" \
             scp \
             -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
             root@"$host":~/load-test/"$log_file" \
             "results/$RUN_ID/$machine/"
         then
@@ -385,6 +461,7 @@ do
         if sshpass -p "$password" \
             scp \
             -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
             root@"$host":~/load-test/"$summary_file" \
             "results/$RUN_ID/$machine/"
         then

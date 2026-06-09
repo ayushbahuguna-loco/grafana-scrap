@@ -13,6 +13,7 @@ machine_host() {
         brazil-01) printf '%s\n' '130.94.106.105' ;;
         brazil-02) printf '%s\n' '130.94.107.80' ;;
         brazil-03) printf '%s\n' '130.94.107.139' ;;
+        brazil-04) printf '%s\n' '130.94.106.176' ;;
         philippines-01) printf '%s\n' '38.60.246.239' ;;
         philippines-02) printf '%s\n' '38.54.36.76' ;;
         philippines-03) printf '%s\n' '38.54.87.127' ;;
@@ -109,6 +110,7 @@ MACHINES=(
   brazil-01
   brazil-02
   brazil-03
+  brazil-04
 )
 
 LOAD_GENERATORS="${#MACHINES[@]}"
@@ -255,7 +257,7 @@ do
     if sshpass -p "$password" \
         ssh \
         -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=10 \
+        -o ConnectTimeout=30 \
         root@"$host" \
         "hostname" >/dev/null
     then

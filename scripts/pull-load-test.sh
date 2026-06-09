@@ -13,6 +13,7 @@ machine_host() {
         brazil-01) printf '%s\n' '130.94.106.105' ;;
         brazil-02) printf '%s\n' '130.94.107.80' ;;
         brazil-03) printf '%s\n' '130.94.107.139' ;;
+        brazil-04) printf '%s\n' '130.94.106.176' ;;
         philippines-01) printf '%s\n' '38.60.246.239' ;;
         philippines-02) printf '%s\n' '38.54.36.76' ;;
         philippines-03) printf '%s\n' '38.54.87.127' ;;
@@ -25,9 +26,9 @@ machine_host() {
 
 
 DEFAULT_MACHINES=(
-  turkey-01
-  turkey-02
-  turkey-03
+    turkey-01
+    turkey-02
+    turkey-03
 )
 
 if [ -n "${MACHINES_OVERRIDE:-}" ]; then
@@ -43,11 +44,11 @@ Usage:
 
 Defaults:
   SSHes into turkey-01, turkey-02, turkey-03 and runs:
-    cd ~/load-test && git pull origin perf/viewer
+    cd ~/load-test && git stash 
 
 Examples:
   ./scripts/pull-load-test.sh
-  MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03" ./scripts/pull-load-test.sh
+  MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03 brazil-04" ./scripts/pull-load-test.sh
   GIT_BRANCH=main ./scripts/pull-load-test.sh
   GIT_REMOTE=upstream GIT_BRANCH=perf/viewer ./scripts/pull-load-test.sh
 EOF

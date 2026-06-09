@@ -29,9 +29,9 @@ machine_host() {
 # Load Test Config
 # =========================
 
-SCRIPT_VERSION="api_coverage_v1_no_k8s"
-DEFAULT_DURATION="${DEFAULT_DURATION:-600s}"
-RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-20s}"
+SCRIPT_VERSION="api_coverage_v1"
+DEFAULT_DURATION="${DEFAULT_DURATION:-120s}"
+RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-60s}"
 STREAM_UID="${STREAM_UID:-58777577-02a3-43b9-83a9-47368563caad}"
 STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
@@ -43,43 +43,26 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 # 500/503 noise in previous runs. Chat flow 12 is included at a deliberately
 # low target because it is not a clean exact-RPS flow in mode=rps.
 FLOW_NAMES=(
-    stream_pre_soak
-    stream_burst
-    stream_soak
-
+    feed_pre_soak
 )
 
 FLOW_IDS=(
-    78
-    78
-    78
-
+    77
 )
 
 FLOW_TARGET_RPS=(
-    2666
-    8000
-    800
+    30
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
   0
-  0
-  0
 )
 
-RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
-METRICS_DIR="results/$RUN_ID/instance-metrics"
-K8S_METRICS_DIR="results/$RUN_ID/k8s-cluster-metrics"
-REPORT_CSV_DIR="results/$RUN_ID/summary-csv"
-# No-K8S clone: keep this hard-disabled so the script does not SSH into
-# K8S_SSH_HOST (`my-machine` by default) through scripts/k8s-cluster-metrics.sh.
-COLLECT_K8S_METRICS="false"
+COLLECT_INSTANCE_METRICS="${COLLECT_INSTANCE_METRICS:-true}"
+COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-false}"
 GENERATE_CSV_REPORT="${GENERATE_CSV_REPORT:-true}"
-CLEANUP_DONE=0
-METRICS_ATTEMPTED=0
-K8S_METRICS_ATTEMPTED=0
+DRY_RUN="${DRY_RUN:-false}"
 
 MACHINES=(
   brazil-01
@@ -88,7 +71,188 @@ MACHINES=(
   brazil-04
 )
 
+usage() {
+    cat <<'EOF'
+Usage:
+  ./scripts/run-test-v5.sh [flags]
+
+Metric flags:
+  --with-dstat, --dstat          Start/stop/collect dstat instance metrics. Default.
+  --no-dstat                     Skip dstat install/check and instance metrics.
+  --with-k8s, --k8s              Start/stop/collect Kubernetes cluster metrics.
+  --no-k8s                       Skip Kubernetes cluster metrics. Default.
+  --all-metrics                  Enable both dstat and Kubernetes metrics.
+  --no-metrics                   Disable both dstat and Kubernetes metrics.
+  --with-csv, --csv              Generate summary CSV. Default.
+  --no-csv                       Skip summary CSV generation.
+  --dry-run                      Print resolved config and exit before SSH.
+
+Run flags:
+  --duration 120s                Override DEFAULT_DURATION.
+  --run-id api_coverage_manual   Override RUN_ID.
+  --machines "brazil-01 brazil-02 brazil-03 brazil-04"
+                                  Override load generator machines.
+
+Environment overrides still work:
+  DEFAULT_DURATION=60s COLLECT_K8S_METRICS=true ./scripts/run-test-v5.sh
+
+Examples:
+  ./scripts/run-test-v5.sh
+  ./scripts/run-test-v5.sh --with-k8s
+  ./scripts/run-test-v5.sh --all-metrics --duration 5m
+  ./scripts/run-test-v5.sh --no-dstat --with-k8s
+  ./scripts/run-test-v5.sh --all-metrics --dry-run
+EOF
+}
+
+parse_bool() {
+    case "$1" in
+        true|TRUE|yes|YES|1|on|ON) printf '%s\n' 'true' ;;
+        false|FALSE|no|NO|0|off|OFF) printf '%s\n' 'false' ;;
+        *) return 1 ;;
+    esac
+}
+
+set_bool_from_value() {
+    var_name="$1"
+    raw_value="$2"
+    option_name="$3"
+
+    parsed_value="$(parse_bool "$raw_value" || true)"
+    if [ -z "$parsed_value" ]; then
+        echo "Invalid boolean for $option_name: $raw_value"
+        echo "Use true/false, yes/no, on/off, or 1/0."
+        exit 1
+    fi
+
+    printf -v "$var_name" '%s' "$parsed_value"
+}
+
+while [ "$#" -gt 0 ]
+do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --with-dstat|--dstat|--instance-metrics)
+            COLLECT_INSTANCE_METRICS="true"
+            ;;
+        --collect-dstat|--collect-instance-metrics)
+            COLLECT_INSTANCE_METRICS="true"
+            ;;
+        --no-dstat|--no-instance-metrics)
+            COLLECT_INSTANCE_METRICS="false"
+            ;;
+        --no-collect-dstat|--no-collect-instance-metrics)
+            COLLECT_INSTANCE_METRICS="false"
+            ;;
+        --dstat=*|--instance-metrics=*)
+            set_bool_from_value COLLECT_INSTANCE_METRICS "${1#*=}" "$1"
+            ;;
+        --with-k8s|--k8s|--kubernetes-metrics)
+            COLLECT_K8S_METRICS="true"
+            ;;
+        --collect-k8s|--collect-kubernetes-metrics)
+            COLLECT_K8S_METRICS="true"
+            ;;
+        --no-k8s|--no-kubernetes-metrics)
+            COLLECT_K8S_METRICS="false"
+            ;;
+        --no-collect-k8s|--no-collect-kubernetes-metrics)
+            COLLECT_K8S_METRICS="false"
+            ;;
+        --k8s=*|--kubernetes-metrics=*)
+            set_bool_from_value COLLECT_K8S_METRICS "${1#*=}" "$1"
+            ;;
+        --all-metrics)
+            COLLECT_INSTANCE_METRICS="true"
+            COLLECT_K8S_METRICS="true"
+            ;;
+        --no-metrics)
+            COLLECT_INSTANCE_METRICS="false"
+            COLLECT_K8S_METRICS="false"
+            ;;
+        --with-csv|--csv)
+            GENERATE_CSV_REPORT="true"
+            ;;
+        --no-csv)
+            GENERATE_CSV_REPORT="false"
+            ;;
+        --csv=*)
+            set_bool_from_value GENERATE_CSV_REPORT "${1#*=}" "$1"
+            ;;
+        --dry-run)
+            DRY_RUN="true"
+            ;;
+        --dry-run=*)
+            set_bool_from_value DRY_RUN "${1#*=}" "$1"
+            ;;
+        --duration)
+            if [ "$#" -lt 2 ]; then
+                echo "--duration requires a value"
+                exit 1
+            fi
+            DEFAULT_DURATION="$2"
+            shift 2
+            continue
+            ;;
+        --duration=*)
+            DEFAULT_DURATION="${1#*=}"
+            ;;
+        --run-id)
+            if [ "$#" -lt 2 ]; then
+                echo "--run-id requires a value"
+                exit 1
+            fi
+            RUN_ID="$2"
+            shift 2
+            continue
+            ;;
+        --run-id=*)
+            RUN_ID="${1#*=}"
+            ;;
+        --machines)
+            if [ "$#" -lt 2 ]; then
+                echo "--machines requires a quoted, space-separated value"
+                exit 1
+            fi
+            read -r -a MACHINES <<< "$2"
+            shift 2
+            continue
+            ;;
+        --machines=*)
+            read -r -a MACHINES <<< "${1#*=}"
+            ;;
+        *)
+            echo "Unknown flag: $1"
+            usage
+            exit 1
+            ;;
+    esac
+
+    shift
+done
+
+set_bool_from_value COLLECT_INSTANCE_METRICS "$COLLECT_INSTANCE_METRICS" "COLLECT_INSTANCE_METRICS"
+set_bool_from_value COLLECT_K8S_METRICS "$COLLECT_K8S_METRICS" "COLLECT_K8S_METRICS"
+set_bool_from_value GENERATE_CSV_REPORT "$GENERATE_CSV_REPORT" "GENERATE_CSV_REPORT"
+set_bool_from_value DRY_RUN "$DRY_RUN" "DRY_RUN"
+
+RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
+METRICS_DIR="results/$RUN_ID/instance-metrics"
+K8S_METRICS_DIR="results/$RUN_ID/k8s-cluster-metrics"
+REPORT_CSV_DIR="results/$RUN_ID/summary-csv"
+CLEANUP_DONE=0
+METRICS_ATTEMPTED=0
+K8S_METRICS_ATTEMPTED=0
+
 LOAD_GENERATORS="${#MACHINES[@]}"
+if [ "$LOAD_GENERATORS" -eq 0 ]; then
+    echo "At least one machine is required"
+    exit 1
+fi
+
 MACHINES_OVERRIDE_VALUE="${MACHINES[*]}"
 
 cleanup_metrics() {
@@ -157,8 +321,14 @@ echo "RUN_ID=$RUN_ID"
 echo "Duration=$DEFAULT_DURATION"
 echo "StreamUID=$STREAM_UID"
 echo "StreamerUID=$STREAMER_UID"
-echo "Instance metrics will be saved under:"
-echo "$METRICS_DIR"
+echo "Machines=$MACHINES_OVERRIDE_VALUE"
+echo "LoadGenerators=$LOAD_GENERATORS"
+if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
+    echo "Instance metrics will be saved under:"
+    echo "$METRICS_DIR"
+else
+    echo "Instance metrics disabled: COLLECT_INSTANCE_METRICS=$COLLECT_INSTANCE_METRICS"
+fi
 if [ "$COLLECT_K8S_METRICS" != "false" ]; then
     echo "Kubernetes metrics will be saved under:"
     echo "$K8S_METRICS_DIR"
@@ -171,18 +341,30 @@ if [ "$GENERATE_CSV_REPORT" != "false" ]; then
 else
     echo "CSV report disabled: GENERATE_CSV_REPORT=$GENERATE_CSV_REPORT"
 fi
+if [ "$DRY_RUN" = "true" ]; then
+    echo "Dry run enabled: no SSH, dstat, Kubernetes, or load-test commands will run"
+fi
 echo "===================================="
 
-mkdir -p "results/$RUN_ID" "$METRICS_DIR"
+if [ "$DRY_RUN" = "true" ]; then
+    exit 0
+fi
+
+mkdir -p "results/$RUN_ID"
+if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
+    mkdir -p "$METRICS_DIR"
+fi
 if [ "$COLLECT_K8S_METRICS" != "false" ]; then
     mkdir -p "$K8S_METRICS_DIR"
 fi
 
-MACHINES_OVERRIDE="$MACHINES_OVERRIDE_VALUE" ./scripts/ensure-dstat.sh
-ENSURE_DSTAT_STATUS=$?
-if [ "$ENSURE_DSTAT_STATUS" -ne 0 ]; then
-    echo "dstat check/install failed; aborting test"
-    exit "$ENSURE_DSTAT_STATUS"
+if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
+    MACHINES_OVERRIDE="$MACHINES_OVERRIDE_VALUE" ./scripts/ensure-dstat.sh
+    ENSURE_DSTAT_STATUS=$?
+    if [ "$ENSURE_DSTAT_STATUS" -ne 0 ]; then
+        echo "dstat check/install failed; aborting test"
+        exit "$ENSURE_DSTAT_STATUS"
+    fi
 fi
 
 # =========================
@@ -243,15 +425,17 @@ do
     fi
 done
 
-METRICS_ATTEMPTED=1
-METRICS_RUN_ID="$RUN_ID" \
-LOCAL_METRICS_DIR="$METRICS_DIR" \
-MACHINES_OVERRIDE="$MACHINES_OVERRIDE_VALUE" \
-./scripts/instance-metrics.sh start
-METRICS_START_STATUS=$?
-if [ "$METRICS_START_STATUS" -ne 0 ]; then
-    echo "instance metrics start failed; stopping any partial collectors"
-    cleanup_metrics "$METRICS_START_STATUS"
+if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
+    METRICS_ATTEMPTED=1
+    METRICS_RUN_ID="$RUN_ID" \
+    LOCAL_METRICS_DIR="$METRICS_DIR" \
+    MACHINES_OVERRIDE="$MACHINES_OVERRIDE_VALUE" \
+    ./scripts/instance-metrics.sh start
+    METRICS_START_STATUS=$?
+    if [ "$METRICS_START_STATUS" -ne 0 ]; then
+        echo "instance metrics start failed; stopping any partial collectors"
+        cleanup_metrics "$METRICS_START_STATUS"
+    fi
 fi
 
 if [ "$COLLECT_K8S_METRICS" != "false" ]; then
@@ -430,8 +614,10 @@ echo "===================================="
 echo "ALL TESTS COMPLETED"
 echo "Results saved under:"
 echo "results/$RUN_ID"
-echo "Instance metrics saved under:"
-echo "$METRICS_DIR"
+if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
+    echo "Instance metrics saved under:"
+    echo "$METRICS_DIR"
+fi
 if [ "$COLLECT_K8S_METRICS" != "false" ]; then
     echo "Kubernetes metrics saved under:"
     echo "$K8S_METRICS_DIR"

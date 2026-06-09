@@ -12,6 +12,7 @@ machine_host() {
         brazil-01) printf '%s\n' '130.94.106.105' ;;
         brazil-02) printf '%s\n' '130.94.107.80' ;;
         brazil-03) printf '%s\n' '130.94.107.139' ;;
+        brazil-04) printf '%s\n' '130.94.106.176' ;;
         philippines-01) printf '%s\n' '38.60.246.239' ;;
         philippines-02) printf '%s\n' '38.54.36.76' ;;
         philippines-03) printf '%s\n' '38.54.87.127' ;;
@@ -24,9 +25,10 @@ machine_host() {
 
 
 DEFAULT_MACHINES=(
-  turkey-01
-  turkey-02
-  turkey-03
+  brazil-01
+  brazil-02
+  brazil-03
+  brazil-04
 )
 
 if [ -n "${MACHINES_OVERRIDE:-}" ]; then
@@ -41,11 +43,11 @@ Usage:
   scripts/ensure-dstat.sh
 
 Defaults:
-  Checks and installs dstat on brazil-01, brazil-02, brazil-03.
+  Checks and installs dstat on brazil-01, brazil-02, brazil-03, brazil-04.
 
 Examples:
   ./scripts/ensure-dstat.sh
-  MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03" ./scripts/ensure-dstat.sh
+  MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03 brazil-04" ./scripts/ensure-dstat.sh
   INSTALL_DSTAT=false ./scripts/ensure-dstat.sh
 
 INSTALL_DSTAT=false only checks presence and does not install.
@@ -78,7 +80,7 @@ ensure_machine() {
     sshpass -p "$password" \
         ssh \
         -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=10 \
+        -o ConnectTimeout=30 \
         root@"$host" "
             set -u
 
