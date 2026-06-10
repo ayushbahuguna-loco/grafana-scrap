@@ -27,6 +27,14 @@ HOSTS["turkey-01"]="38.54.105.173"
 HOSTS["turkey-02"]="38.60.208.90"
 HOSTS["turkey-03"]="38.60.255.75"
 
+HOSTS["load-test-egypt-01"]="38.54.59.190"
+HOSTS["load-test-egypt-02"]="38.60.226.10"
+HOSTS["load-test-egypt-03"]="38.60.226.153"
+
+HOSTS["load-test-saudi-01"]="130.94.58.123"
+HOSTS["load-test-saudi-02"]="130.94.58.144"
+HOSTS["load-test-saudi-03"]="130.94.57.133"
+
 # =========================
 # Load Test Config
 # =========================
@@ -44,6 +52,14 @@ FLOW_IDS["turkey-01"]=42
 FLOW_IDS["turkey-02"]=42
 FLOW_IDS["turkey-03"]=42
 
+FLOW_IDS["load-test-egypt-01"]=42
+FLOW_IDS["load-test-egypt-02"]=42
+FLOW_IDS["load-test-egypt-03"]=42
+
+FLOW_IDS["load-test-saudi-01"]=42
+FLOW_IDS["load-test-saudi-02"]=42
+FLOW_IDS["load-test-saudi-03"]=42
+
 TARGET_RPS["brazil-01"]=1900
 TARGET_RPS["brazil-02"]=1900
 TARGET_RPS["brazil-03"]=1900
@@ -56,6 +72,14 @@ TARGET_RPS["philippines-03"]=1200
 TARGET_RPS["turkey-01"]=1200
 TARGET_RPS["turkey-02"]=1200
 TARGET_RPS["turkey-03"]=1200
+
+TARGET_RPS["load-test-egypt-01"]=1200
+TARGET_RPS["load-test-egypt-02"]=1200
+TARGET_RPS["load-test-egypt-03"]=1200
+
+TARGET_RPS["load-test-saudi-01"]=1200
+TARGET_RPS["load-test-saudi-02"]=1200
+TARGET_RPS["load-test-saudi-03"]=1200
 
 RPS_WORKERS["brazil-01"]=4800
 RPS_WORKERS["brazil-02"]=4800
@@ -70,6 +94,14 @@ RPS_WORKERS["turkey-01"]=3600
 RPS_WORKERS["turkey-02"]=3600
 RPS_WORKERS["turkey-03"]=3600
 
+RPS_WORKERS["load-test-egypt-01"]=3600
+RPS_WORKERS["load-test-egypt-02"]=3600
+RPS_WORKERS["load-test-egypt-03"]=3600
+
+RPS_WORKERS["load-test-saudi-01"]=3600
+RPS_WORKERS["load-test-saudi-02"]=3600
+RPS_WORKERS["load-test-saudi-03"]=3600
+
 DURATION["brazil-01"]="30s"
 DURATION["brazil-02"]="30s"
 DURATION["brazil-03"]="30s"
@@ -82,6 +114,14 @@ DURATION["philippines-03"]="30s"
 DURATION["turkey-01"]="30s"
 DURATION["turkey-02"]="30s"
 DURATION["turkey-03"]="30s"
+
+DURATION["load-test-egypt-01"]="30s"
+DURATION["load-test-egypt-02"]="30s"
+DURATION["load-test-egypt-03"]="30s"
+
+DURATION["load-test-saudi-01"]="30s"
+DURATION["load-test-saudi-02"]="30s"
+DURATION["load-test-saudi-03"]="30s"
 
 SCRIPT_VERSION="v2"
 

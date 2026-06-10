@@ -1,29 +1,11 @@
 #!/bin/bash
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=machine-passwords.sh
 . "$SCRIPT_DIR/machine-passwords.sh"
 
-# =========================
-# Machine Config
-# =========================
-
-machine_host() {
-    case "$1" in
-        brazil-01) printf '%s\n' '130.94.106.105' ;;
-        brazil-02) printf '%s\n' '130.94.107.80' ;;
-        brazil-03) printf '%s\n' '130.94.107.139' ;;
-        brazil-04) printf '%s\n' '130.94.106.176' ;;
-        philippines-01) printf '%s\n' '38.60.246.239' ;;
-        philippines-02) printf '%s\n' '38.54.36.76' ;;
-        philippines-03) printf '%s\n' '38.54.87.127' ;;
-        turkey-01) printf '%s\n' '38.60.208.217' ;;
-        turkey-02) printf '%s\n' '130.94.1.175' ;;
-        turkey-03) printf '%s\n' '38.54.105.77' ;;
-        *) return 1 ;;
-    esac
-}
-
+cd "$REPO_ROOT" || exit 1
 
 # =========================
 # Load Test Config
@@ -156,6 +138,10 @@ MACHINES=(
     turkey-03
 )
 
+if [ -n "${MACHINES_OVERRIDE:-}" ]; then
+    read -r -a MACHINES <<< "$MACHINES_OVERRIDE"
+fi
+
 LOAD_GENERATORS="${#MACHINES[@]}"
 MACHINES_OVERRIDE_VALUE="${MACHINES[*]}"
 
@@ -242,6 +228,10 @@ else
 fi
 echo "===================================="
 
+if ! require_machine_scp_tools "${MACHINES[@]}"; then
+    exit 1
+fi
+
 mkdir -p "results/$RUN_ID" "$METRICS_DIR"
 if [ "$COLLECT_K8S_METRICS" != "false" ]; then
     mkdir -p "$K8S_METRICS_DIR"
@@ -295,19 +285,13 @@ do
     echo "Checking $machine"
 
     host="$(machine_host "$machine" || true)"
-    password="$(machine_password "$machine" || true)"
 
-    if [ -z "$host" ] || [ -z "$password" ]; then
+    if [ -z "$host" ]; then
         echo "❌ $machine unknown machine"
         exit 1
     fi
 
-    if sshpass -p "$password" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=30 \
-        root@"$host" \
-        "hostname" >/dev/null
+    if machine_ssh "$machine" "hostname" >/dev/null
     then
         echo "✅ $machine"
     else
@@ -365,9 +349,8 @@ do
     (
         machine="${MACHINES[$machine_index]}"
         host="$(machine_host "$machine" || true)"
-        password="$(machine_password "$machine" || true)"
 
-        if [ -z "$host" ] || [ -z "$password" ]; then
+        if [ -z "$host" ]; then
             echo "[$machine][$flow_name] ❌ unknown machine"
             exit 1
         fi
@@ -380,11 +363,7 @@ do
 
         echo "[$machine][$flow_name] FlowID=$flow_id TargetRPS=$target_rps Duration=$duration"
 
-        sshpass -p "$password" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=30 \
-        root@"$host" "
+        machine_ssh "$machine" "
             cd ~/load-test || exit 1
 
             LOG_FILE=$log_file
@@ -406,7 +385,7 @@ do
             echo 'RunID=$flow_run_id' >> \$SUMMARY_FILE
             echo 'StartTimeIST='\$START_TIME >> \$SUMMARY_FILE
 
-            export PATH=/usr/local/go/bin:/usr/lib/go-1.22/bin:/root/go/bin:\$PATH
+            export PATH=/usr/local/go/bin:/usr/lib/go-1.22/bin:\$HOME/go/bin:/root/go/bin:\$PATH
 
             GO_BIN=\$(command -v go || true)
 
@@ -444,12 +423,7 @@ do
         copy_status=0
 
         # Download log
-        if sshpass -p "$password" \
-            scp \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=30 \
-            root@"$host":~/load-test/"$log_file" \
-            "results/$RUN_ID/$machine/"
+        if machine_scp_from "$machine" "load-test/$log_file" "results/$RUN_ID/$machine/"
         then
             echo "[$machine][$flow_name] ✅ log copied"
         else
@@ -458,12 +432,7 @@ do
         fi
 
         # Download summary
-        if sshpass -p "$password" \
-            scp \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=30 \
-            root@"$host":~/load-test/"$summary_file" \
-            "results/$RUN_ID/$machine/"
+        if machine_scp_from "$machine" "load-test/$summary_file" "results/$RUN_ID/$machine/"
         then
             echo "[$machine][$flow_name] ✅ summary copied"
         else

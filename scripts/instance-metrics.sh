@@ -7,31 +7,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ACTION="${1:-run}"
 METRICS_RUN_ID="${METRICS_RUN_ID:-metrics_$(date +%Y%m%d_%H%M%S)}"
-REMOTE_DIR="${REMOTE_DIR:-~/load-test}"
-REMOTE_METRICS_DIR="${REMOTE_METRICS_DIR:-~/load-test/metrics}"
+REMOTE_DIR="${REMOTE_DIR:-load-test}"
+REMOTE_METRICS_DIR="${REMOTE_METRICS_DIR:-load-test/metrics}"
 LOCAL_METRICS_DIR="${LOCAL_METRICS_DIR:-results/$METRICS_RUN_ID/instance-metrics}"
 DSTAT_COMMAND="${DSTAT_COMMAND:-dstat -tcmn --tcp --top-cpu --top-mem 1}"
 SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-30}"
 SSH_ATTEMPTS="${SSH_ATTEMPTS:-5}"
 SSH_RETRY_DELAY_SECONDS="${SSH_RETRY_DELAY_SECONDS:-5}"
 METRICS_PARALLEL="${METRICS_PARALLEL:-false}"
-
-machine_host() {
-    case "$1" in
-        brazil-01) printf '%s\n' '130.94.106.105' ;;
-        brazil-02) printf '%s\n' '130.94.107.80' ;;
-        brazil-03) printf '%s\n' '130.94.107.139' ;;
-        brazil-04) printf '%s\n' '130.94.106.176' ;;
-        philippines-01) printf '%s\n' '38.60.246.239' ;;
-        philippines-02) printf '%s\n' '38.54.36.76' ;;
-        philippines-03) printf '%s\n' '38.54.87.127' ;;
-        turkey-01) printf '%s\n' '38.60.208.217' ;;
-        turkey-02) printf '%s\n' '130.94.1.175' ;;
-        turkey-03) printf '%s\n' '38.54.105.77' ;;
-        *) return 1 ;;
-    esac
-}
-
 
 DEFAULT_MACHINES=(
   brazil-01
@@ -77,10 +60,7 @@ EOF
 }
 
 require_local_tools() {
-    if ! command -v sshpass >/dev/null 2>&1; then
-        echo "sshpass not found"
-        exit 1
-    fi
+    require_machine_scp_tools "${MACHINES[@]}" || exit 1
 }
 
 remote_log_file() {
@@ -119,48 +99,18 @@ retry_command() {
 ssh_machine() {
     machine="$1"
     shift
-    host="$(machine_host "$machine" || true)"
-    password="$(machine_password "$machine" || true)"
-
-    if [ -z "$host" ] || [ -z "$password" ]; then
-        echo "[$machine] unknown machine"
-        return 1
-    fi
 
     retry_command "[$machine] ssh" \
-        sshpass -p "$password" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o NumberOfPasswordPrompts=1 \
-        root@"$host" \
-        "$@"
+        machine_ssh "$machine" "$@"
 }
 
 scp_from_machine() {
     machine="$1"
     remote_file="$2"
     local_dir="$3"
-    host="$(machine_host "$machine" || true)"
-    password="$(machine_password "$machine" || true)"
-
-    if [ -z "$host" ] || [ -z "$password" ]; then
-        echo "[$machine] unknown machine"
-        return 1
-    fi
 
     retry_command "[$machine] scp" \
-        sshpass -p "$password" \
-        scp \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o NumberOfPasswordPrompts=1 \
-        root@"$host":"$remote_file" \
-        "$local_dir/"
+        machine_scp_from "$machine" "$remote_file" "$local_dir/"
 }
 
 start_metric_machine() {

@@ -7,23 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 INSTALL_DSTAT="${INSTALL_DSTAT:-true}"
 
-machine_host() {
-    case "$1" in
-        brazil-01) printf '%s\n' '130.94.106.105' ;;
-        brazil-02) printf '%s\n' '130.94.107.80' ;;
-        brazil-03) printf '%s\n' '130.94.107.139' ;;
-        brazil-04) printf '%s\n' '130.94.106.176' ;;
-        philippines-01) printf '%s\n' '38.60.246.239' ;;
-        philippines-02) printf '%s\n' '38.54.36.76' ;;
-        philippines-03) printf '%s\n' '38.54.87.127' ;;
-        turkey-01) printf '%s\n' '38.60.208.217' ;;
-        turkey-02) printf '%s\n' '130.94.1.175' ;;
-        turkey-03) printf '%s\n' '38.54.105.77' ;;
-        *) return 1 ;;
-    esac
-}
-
-
 DEFAULT_MACHINES=(
   brazil-01
   brazil-02
@@ -59,8 +42,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     exit 0
 fi
 
-if ! command -v sshpass >/dev/null 2>&1; then
-    echo "sshpass not found"
+if ! require_machine_ssh_tools "${MACHINES[@]}"; then
     exit 1
 fi
 
@@ -68,20 +50,15 @@ ensure_machine() {
     machine="$1"
 
     host="$(machine_host "$machine" || true)"
-    password="$(machine_password "$machine" || true)"
 
-    if [ -z "$host" ] || [ -z "$password" ]; then
+    if [ -z "$host" ]; then
         echo "[$machine] unknown machine"
         return 1
     fi
 
     echo "[$machine] checking dstat"
 
-    sshpass -p "$password" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=30 \
-        root@"$host" "
+    machine_ssh "$machine" "
             set -u
 
             if command -v dstat >/dev/null 2>&1; then

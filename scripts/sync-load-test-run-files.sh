@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RUN_ID=""
 SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-60}"
-REMOTE_DIR="${REMOTE_DIR:-/root/load-test}"
+REMOTE_DIR="${REMOTE_DIR:-load-test}"
 FORCE_COPY="false"
 GENERATE_REPORT="true"
 MACHINES_ARG="${MACHINES_OVERRIDE:-}"
@@ -60,7 +60,7 @@ Options:
   --machines "LIST"      Space-separated machine list.
                           Default: brazil-01 brazil-02 brazil-03 brazil-04
   --flows "LIST"         Space-separated flow list.
-  --remote-dir PATH      Remote load-test directory. Default: /root/load-test
+  --remote-dir PATH      Remote load-test directory. Default: ~/load-test
   --force                Copy even if the local file already exists.
   --no-report            Do not regenerate summary CSV files after sync.
   -h, --help             Show this help.
@@ -79,31 +79,8 @@ Environment overrides:
 EOF
 }
 
-machine_host() {
-    case "$1" in
-        brazil-01) printf '%s\n' '130.94.106.105' ;;
-        brazil-02) printf '%s\n' '130.94.107.80' ;;
-        brazil-03) printf '%s\n' '130.94.107.139' ;;
-        brazil-04) printf '%s\n' '130.94.106.176' ;;
-        philippines-01) printf '%s\n' '38.60.246.239' ;;
-        philippines-02) printf '%s\n' '38.54.36.76' ;;
-        philippines-03) printf '%s\n' '38.54.87.127' ;;
-        turkey-01) printf '%s\n' '38.60.208.217' ;;
-        turkey-02) printf '%s\n' '130.94.1.175' ;;
-        turkey-03) printf '%s\n' '38.54.105.77' ;;
-        *) return 1 ;;
-    esac
-}
-
 require_local_tools() {
-    local tool
-
-    for tool in sshpass ssh scp; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            echo "Missing required local command: $tool"
-            exit 1
-        fi
-    done
+    require_machine_scp_tools "${MACHINES[@]}" || exit 1
 }
 
 parse_args() {
@@ -207,46 +184,27 @@ build_lists() {
 }
 
 ssh_machine() {
-    local password="$1"
-    local host="$2"
-    local command="$3"
+    local machine="$1"
+    local command="$2"
 
-    sshpass -p "$password" \
-        ssh -n \
-        -o StrictHostKeyChecking=no \
-        -o "ConnectTimeout=$SSH_CONNECT_TIMEOUT" \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o NumberOfPasswordPrompts=1 \
-        "root@$host" \
-        "$command"
+    machine_ssh "$machine" "$command" </dev/null
 }
 
 remote_file_info() {
-    local password="$1"
-    local host="$2"
-    local remote_file="$3"
+    local machine="$1"
+    local remote_file="$2"
     local remote_quoted
 
     remote_quoted="$(printf '%q' "$remote_file")"
-    ssh_machine "$password" "$host" "test -f $remote_quoted && ls -lh $remote_quoted"
+    ssh_machine "$machine" "test -f $remote_quoted && ls -lh $remote_quoted"
 }
 
 scp_from_machine() {
-    local password="$1"
-    local host="$2"
-    local remote_file="$3"
-    local local_dir="$4"
+    local machine="$1"
+    local remote_file="$2"
+    local local_dir="$3"
 
-    sshpass -p "$password" \
-        scp \
-        -o StrictHostKeyChecking=no \
-        -o "ConnectTimeout=$SSH_CONNECT_TIMEOUT" \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o NumberOfPasswordPrompts=1 \
-        "root@$host:$remote_file" \
-        "$local_dir/" </dev/null
+    machine_scp_from "$machine" "$remote_file" "$local_dir/" </dev/null
 }
 
 checked_count=0
@@ -259,9 +217,7 @@ login_failed_count=0
 
 sync_one_file() {
     local machine="$1"
-    local password="$2"
-    local host="$3"
-    local file="$4"
+    local file="$2"
     local local_dir="$REPO_ROOT/results/$RUN_ID/$machine"
     local local_file="$local_dir/$file"
     local remote_file="$REMOTE_DIR/$file"
@@ -278,7 +234,7 @@ sync_one_file() {
     fi
 
     echo "CHECK remote: $machine:$remote_file"
-    info="$(remote_file_info "$password" "$host" "$remote_file" 2>&1)"
+    info="$(remote_file_info "$machine" "$remote_file" 2>&1)"
     status=$?
 
     if [ "$status" -ne 0 ]; then
@@ -298,7 +254,7 @@ sync_one_file() {
         echo "FORCE copy over local file: results/$RUN_ID/$machine/$file"
     fi
 
-    if scp_from_machine "$password" "$host" "$remote_file" "$local_dir"; then
+    if scp_from_machine "$machine" "$remote_file" "$local_dir"; then
         echo "COPY OK: results/$RUN_ID/$machine/$file"
         copy_count=$((copy_count + 1))
     else
@@ -310,27 +266,25 @@ sync_one_file() {
 sync_machine() {
     local machine="$1"
     local host
-    local password
     local hostname
     local flow
     local flow_run_id
 
     host="$(machine_host "$machine" || true)"
-    password="$(machine_password "$machine" || true)"
 
     echo ""
     echo "===================================="
     echo "Machine: $machine"
     echo "===================================="
 
-    if [ -z "$host" ] || [ -z "$password" ]; then
-        echo "LOGIN FAILED: $machine unknown host or missing password"
+    if [ -z "$host" ]; then
+        echo "LOGIN FAILED: $machine unknown host"
         login_failed_count=$((login_failed_count + 1))
         return 0
     fi
 
     echo "Checking login: $machine ($host)"
-    hostname="$(ssh_machine "$password" "$host" "hostname" 2>&1)"
+    hostname="$(ssh_machine "$machine" "hostname" 2>&1)"
     if [ "$?" -ne 0 ]; then
         echo "LOGIN FAILED: $machine"
         echo "$hostname"
@@ -342,8 +296,8 @@ sync_machine() {
     for flow in "${FLOWS[@]}"; do
         flow_run_id="${RUN_ID}_${machine}_${flow}"
 
-        sync_one_file "$machine" "$password" "$host" "loadtest_${flow_run_id}.log"
-        sync_one_file "$machine" "$password" "$host" "summary_${flow_run_id}.txt"
+        sync_one_file "$machine" "loadtest_${flow_run_id}.log"
+        sync_one_file "$machine" "summary_${flow_run_id}.txt"
     done
 }
 
@@ -382,8 +336,8 @@ main() {
     local issue_count
 
     parse_args "$@"
-    require_local_tools
     build_lists
+    require_local_tools
 
     echo "RUN_ID=$RUN_ID"
     echo "RemoteDir=$REMOTE_DIR"
