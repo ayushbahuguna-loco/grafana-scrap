@@ -37,6 +37,11 @@ HOSTS["load-test-saudi-01"]="130.94.58.123"
 HOSTS["load-test-saudi-02"]="130.94.58.144"
 HOSTS["load-test-saudi-03"]="130.94.57.133"
 
+HOSTS["load-test-iraq-01"]="38.60.190.170"
+HOSTS["load-test-qatar-01"]="149.104.121.57"
+HOSTS["load-test-kuwait-01"]="130.94.82.217"
+HOSTS["load-test-bahrain-01"]="149.104.106.7"
+
 # =========================
 # Load Test Config
 # =========================
@@ -62,6 +67,11 @@ FLOW_IDS["load-test-saudi-01"]=42
 FLOW_IDS["load-test-saudi-02"]=42
 FLOW_IDS["load-test-saudi-03"]=42
 
+FLOW_IDS["load-test-iraq-01"]=42
+FLOW_IDS["load-test-qatar-01"]=42
+FLOW_IDS["load-test-kuwait-01"]=42
+FLOW_IDS["load-test-bahrain-01"]=42
+
 TARGET_RPS["brazil-01"]=1200
 TARGET_RPS["brazil-02"]=1200
 TARGET_RPS["brazil-03"]=1200
@@ -82,6 +92,11 @@ TARGET_RPS["load-test-egypt-03"]=1200
 TARGET_RPS["load-test-saudi-01"]=1200
 TARGET_RPS["load-test-saudi-02"]=1200
 TARGET_RPS["load-test-saudi-03"]=1200
+
+TARGET_RPS["load-test-iraq-01"]=1200
+TARGET_RPS["load-test-qatar-01"]=1200
+TARGET_RPS["load-test-kuwait-01"]=1200
+TARGET_RPS["load-test-bahrain-01"]=1200
 
 RPS_WORKERS["brazil-01"]=3600
 RPS_WORKERS["brazil-02"]=3600
@@ -104,6 +119,11 @@ RPS_WORKERS["load-test-saudi-01"]=3600
 RPS_WORKERS["load-test-saudi-02"]=3600
 RPS_WORKERS["load-test-saudi-03"]=3600
 
+RPS_WORKERS["load-test-iraq-01"]=3600
+RPS_WORKERS["load-test-qatar-01"]=3600
+RPS_WORKERS["load-test-kuwait-01"]=3600
+RPS_WORKERS["load-test-bahrain-01"]=3600
+
 DURATION["brazil-01"]="30s"
 DURATION["brazil-02"]="30s"
 DURATION["brazil-03"]="30s"
@@ -124,6 +144,11 @@ DURATION["load-test-egypt-03"]="30s"
 DURATION["load-test-saudi-01"]="30s"
 DURATION["load-test-saudi-02"]="30s"
 DURATION["load-test-saudi-03"]="30s"
+
+DURATION["load-test-iraq-01"]="30s"
+DURATION["load-test-qatar-01"]="30s"
+DURATION["load-test-kuwait-01"]="30s"
+DURATION["load-test-bahrain-01"]="30s"
 
 # =========================
 # Execute

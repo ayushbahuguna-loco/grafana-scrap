@@ -26,6 +26,10 @@ machine_host() {
         saudi-01|load-test-saudi-01) printf '%s\n' '130.94.58.123' ;;
         saudi-02|load-test-saudi-02) printf '%s\n' '130.94.58.144' ;;
         saudi-03|load-test-saudi-03) printf '%s\n' '130.94.57.133' ;;
+        iraq-01|load-test-iraq-01) printf '%s\n' '38.60.190.170' ;;
+        qatar-01|load-test-qatar-01) printf '%s\n' '149.104.121.57' ;;
+        kuwait-01|load-test-kuwait-01) printf '%s\n' '130.94.82.217' ;;
+        bahrain-01|load-test-bahrain-01) printf '%s\n' '149.104.106.7' ;;
         *) return 1 ;;
     esac
 }

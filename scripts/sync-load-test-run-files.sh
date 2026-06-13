@@ -37,6 +37,12 @@ DEFAULT_FLOWS=(
   quest_rewards_pre_soak
   quest_rewards_burst
   quest_rewards_soak
+  leaderboard_pre_soak
+  leaderboard_burst
+  leaderboard_soak
+  search_pre_soak
+  search_burst
+  search_soak
 )
 
 usage() {

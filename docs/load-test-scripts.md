@@ -1,675 +1,437 @@
-# Load Test Scripts Handoff
+# Regional Load Test v6 Runbook
 
-This document describes the active load-test scripts in this repo:
-
-```text
-/Users/ayush/work/grafana-scrap
-```
-
-It focuses only on the shell scripts currently used to run the test, install/check `dstat`, collect instance metrics, collect Kubernetes metrics, generate CSV summaries, and generate local result files.
-
-## Active Scripts
-
-### `scripts/run-test-v3.sh`
-
-Primary entry point. This is the script to run for the load test.
-
-It does all of the following:
-
-1. Builds a `RUN_ID`.
-2. Creates a local result directory under `results/<RUN_ID>/`.
-3. Runs `scripts/ensure-dstat.sh` against the configured load-generator machines.
-4. SSH-checks the configured machines.
-5. Starts `dstat` on each machine through `scripts/instance-metrics.sh start`.
-6. Starts Kubernetes cluster metrics through `scripts/k8s-cluster-metrics.sh start`, unless `COLLECT_K8S_METRICS=false`.
-7. Runs each configured flow sequentially.
-8. Runs the same flow in parallel across all configured machines.
-9. Copies each machine's remote load-test log and summary into `results/<RUN_ID>/<machine>/`.
-10. Stops `dstat` and copies dstat logs into `results/<RUN_ID>/instance-metrics/`.
-11. Stops Kubernetes metrics and copies cluster metrics into `results/<RUN_ID>/k8s-cluster-metrics/`.
-12. Generates summary CSV files into `results/<RUN_ID>/summary-csv/`, unless `GENERATE_CSV_REPORT=false`.
-13. Cleans up both metric collectors on `INT`/`TERM` through a trap.
-
-Current active machines:
-
-```text
-brazil-01
-brazil-02
-brazil-03
-```
-
-Current active flows:
-
-| Flow name | Flow ID | Target RPS |
-|---|---:|---:|
-| `auth_signup_bundle` | 24 | 16002 |
-| `feed_v4` | 69 | 2667 |
-| `stream_playback_v2` | 10 | 2667 |
-| `stream_detail_v2` | 11 | 2667 |
-| `store_wallet_stickers_bundle` | 33 | 8001 |
-| `categories_listed` | 64 | 2667 |
-| `sidenav` | 65 | 2667 |
-| `sub_recipe_web_videos_global` | 66 | 2667 |
-| `sub_recipe_streamer_profile_v2` | 67 | 1867 |
-| `sub_recipe_web_home_global` | 68 | 1333 |
-| `profile_me_permissions` | 63 | 2667 |
-| `rewards` | 57 | 533 |
-| `quests` | 56 | 533 |
-| `refresh_token` | 6 | 2667 |
-| `username_hai_kya` | 72 | 8001 |
-| `stream_me_v2` | 59 | 2667 |
-| `stream_playback_v1` | 58 | 2667 |
-| `profile_followee` | 61 | 2667 |
-| `profile_streams` | 62 | 2667 |
-| `bundle_all` | 34 | 2667 |
-
-Flow 7 is intentionally split into focused flows (`69`, `10`, and `11`) because
-the bundled flow had 500/503 noise in previous runs. Chat flow 12 is excluded
-because it is not a clean exact-RPS flow in `mode=rps`.
-
-The script passes `LOAD_GENERATORS=3` and `LOAD_GENERATOR_INDEX=<0..2>` to the remote runner so the target is split across the configured machines.
-
-Important: the remote load test is executed on each load generator from:
-
-```text
-~/load-test
-```
-
-The command run remotely is effectively:
+Use this doc for the current regional load-test script only:
 
 ```bash
-MODE=rps \
-RUN_ID=<flow_run_id> \
-STREAM_UID=<stream uid> \
-STREAMER_UID=<streamer uid> \
-FLOW_ID=<flow id> \
-TARGET_RPS=<flow target rps> \
-RPS_WORKERS=<workers> \
-DURATION=<duration> \
-LOAD_GENERATORS=<machine count> \
-LOAD_GENERATOR_INDEX=<machine index> \
-RPS_DRAIN_TIMEOUT=<drain timeout> \
-./scripts/run-direct.sh > <log_file> 2>&1
+./scripts/run-test-v6.sh
 ```
 
-### `scripts/ensure-dstat.sh`
-
-Checks whether `dstat` exists on each configured machine. If it is missing, it tries to install it.
-
-Default machines:
-
-```text
-brazil-01 brazil-02 brazil-03
-```
-
-Install behavior:
-
-- Uses `apt-get install -y dstat` when `apt-get` exists.
-- Falls back to `apt-get install -y pcp` if `dstat` package is unavailable.
-- Supports `dnf` and `yum` with the same `dstat` then `pcp` fallback.
-- Exits non-zero if `dstat` is still unavailable after install.
-
-Useful commands:
-
-```bash
-./scripts/ensure-dstat.sh
-INSTALL_DSTAT=false ./scripts/ensure-dstat.sh
-MACHINES_OVERRIDE="brazil-01 brazil-02" ./scripts/ensure-dstat.sh
-```
-
-`INSTALL_DSTAT=false` performs a check-only run and does not install anything.
-
-### `scripts/instance-metrics.sh`
-
-Starts, stops, checks, and collects instance-level metrics using `dstat`.
-
-Default dstat command:
-
-```bash
-dstat -tcmn --tcp --top-cpu --top-mem 1
-```
-
-What this captures:
-
-- timestamp
-- CPU utilization
-- memory usage
-- network send/receive
-- TCP counters
-- top CPU process
-- top memory process
-
-Actions:
-
-```bash
-./scripts/instance-metrics.sh start
-./scripts/instance-metrics.sh stop
-./scripts/instance-metrics.sh collect
-./scripts/instance-metrics.sh status
-```
-
-The `run` action exists in the helper, but in this repo the preferred entry point is `scripts/run-test-v3.sh`. Use `run-test-v3.sh` because it coordinates the load test and metrics collection together.
-
-Useful environment overrides:
-
-| Variable | Purpose |
-|---|---|
-| `METRICS_RUN_ID` | Run ID used in remote and local dstat filenames. |
-| `LOCAL_METRICS_DIR` | Local directory where copied dstat logs are saved. |
-| `REMOTE_METRICS_DIR` | Remote directory where dstat writes logs. Default: `~/load-test/metrics`. |
-| `DSTAT_COMMAND` | Overrides the dstat command. |
-| `MACHINES_OVERRIDE` | Space-separated machine list to target. |
-
-Remote files created by `instance-metrics.sh`:
-
-```text
-~/load-test/metrics/dstat_<RUN_ID>_<machine>.log
-~/load-test/metrics/dstat_<RUN_ID>_<machine>.pid
-```
-
-Local copied files:
-
-```text
-results/<RUN_ID>/instance-metrics/dstat_<RUN_ID>_<machine>.log
-```
-
-## How To Run
-
-From the active project:
+Run every command from this repo:
 
 ```bash
 cd /Users/ayush/work/grafana-scrap
-./scripts/run-test-v3.sh
 ```
 
-A short smoke run:
+The main 188.5k-user test is:
 
 ```bash
-DEFAULT_DURATION=30s ./scripts/run-test-v3.sh
+./scripts/run-test-v6.sh --no-k8s --test 2
 ```
 
-If the local shell has issues, run explicitly with Bash:
+That targets Brazil, Turkey, Philippines, Saudi, and Egypt:
+
+```text
+79.5k + 55k + 18k + 22.5k + 13.5k = 188.5k users
+```
+
+For the most stable run, skip Kubernetes metrics and dstat:
 
 ```bash
-/bin/bash scripts/run-test-v3.sh
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2
 ```
 
-On machines with Homebrew Bash:
+## Command Catalog
+
+| Command | What it does |
+|---|---|
+| `./scripts/run-test-v6.sh --no-k8s --test 2` | Runs the current 188.5k-user regional test across Brazil, Turkey, Philippines, Saudi, and Egypt. Keeps dstat on, skips Kubernetes metrics. |
+| `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2` | Runs the same 188.5k-user test without Kubernetes metrics or dstat. Use this when metrics are failing or you only need load-test logs and CSVs. |
+| `./scripts/run-test-v6.sh --dry-run --no-k8s --no-dstat --test 2` | Prints selected machines, flows, durations, and calculated RPS. Does not SSH or run load. Use before a real test. |
+| `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --duration 30s` | Short smoke test. Overrides every flow duration to 30 seconds, which increases calculated RPS. Use only for validation, not final numbers. |
+| `./scripts/run-test-v6.sh --no-k8s --test 1` | Runs Brazil + Turkey only. |
+| `./scripts/run-test-v6.sh --no-k8s --preset middle-east` | Runs Iraq, Jordan+Lebanon via Bahrain, Qatar, and Kuwait. |
+| `./scripts/run-test-v6.sh --k8s --test 2` | Runs the 188.5k-user test and also starts Kubernetes metrics. Use only when `ssh my-machine` and `kubectl` are healthy. |
+| `./scripts/run-test-v6.sh --no-k8s --no-csv --test 2` | Runs load but skips final CSV generation. Use only when debugging raw logs. |
+| `RUN_ID=my_debug_run ./scripts/run-test-v6.sh --no-k8s --test 2` | Uses a fixed run id instead of generating one. Useful for controlled reruns. |
+| `STREAM_UID=<stream_uid> STREAMER_UID=<streamer_uid> ./scripts/run-test-v6.sh --no-k8s --test 2` | Overrides the stream and streamer used by flows that need them. |
+| `RPS_DRAIN_TIMEOUT=60s ./scripts/run-test-v6.sh --no-k8s --test 2` | Gives the remote runner more drain time after each flow. |
+
+## Region Commands
+
+The script calculates RPS from the region attached to each machine. Use
+`--machines` when you want one region or a custom region mix.
+
+| Region set | Command |
+|---|---|
+| Full 188.5k current test | `./scripts/run-test-v6.sh --no-k8s --test 2` |
+| Brazil + Turkey | `./scripts/run-test-v6.sh --no-k8s --test 1` |
+| Middle East preset | `./scripts/run-test-v6.sh --no-k8s --preset middle-east` |
+| Brazil only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04"` |
+| Turkey only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-turkey-01 load-test-turkey-02 load-test-turkey-03"` |
+| Philippines only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03"` |
+| Saudi only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-saudi-01 load-test-saudi-02 load-test-saudi-03"` |
+| Egypt only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-egypt-01 load-test-egypt-02"` |
+| Iraq only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-iraq-01"` |
+| Jordan+Lebanon only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-bahrain-01"` |
+| Qatar only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-qatar-01"` |
+| Kuwait only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-kuwait-01"` |
+
+Known region user targets:
+
+| Region | Users | Machines |
+|---|---:|---|
+| Brazil | 79.5k | `load-test-brazil-lightnode-01..04` |
+| Turkey | 55k | `load-test-turkey-01..03` |
+| Philippines | 18k | `load-test-linux-philippines-01..03` |
+| Saudi | 22.5k | `load-test-saudi-01..03` |
+| Egypt | 13.5k | `load-test-egypt-01..02` |
+| Iraq | 7.2k | `load-test-iraq-01` |
+| Jordan+Lebanon | 6.3k | `load-test-bahrain-01` |
+| Qatar | 2.25k | `load-test-qatar-01` |
+| Kuwait | 3.6k | `load-test-kuwait-01` |
+
+## Default Flows
+
+Each default flow runs in this order:
+
+```text
+auth_pre_soak
+auth_burst
+auth_soak
+feed_pre_soak
+feed_burst
+feed_soak
+stream_pre_soak
+stream_burst
+stream_soak
+chat_pre_soak
+chat_burst
+chat_soak
+quest_rewards_pre_soak
+quest_rewards_burst
+quest_rewards_soak
+leaderboard_pre_soak
+leaderboard_burst
+leaderboard_soak
+search_pre_soak
+search_burst
+search_soak
+```
+
+API counts used for RPS:
+
+| Flow ID | Name | API calls |
+|---:|---|---:|
+| 41 | leaderboard | 5 |
+| 76 | auth | 7 |
+| 77 | feed | 6 |
+| 78 | stream | 6 |
+| 79 | chat | 3 |
+| 80 | quest_rewards | 2 |
+| 82 | search | 2 |
+
+Default durations:
+
+| Phase | Duration |
+|---|---:|
+| `pre_soak` | `180s` |
+| `burst` | `60s` |
+| `soak` | `600s` |
+
+## RPS Tuning
+
+The script does not take a direct `--target-rps` flag. It calculates RPS from
+users, API count, duration, and selected same-region machine count.
+
+Formula:
+
+```text
+regional target RPS = users_in_thousands * 1000 * API calls in flow / duration_seconds
+machine-local target RPS = regional target RPS / selected machine count for that region
+```
+
+Rules:
+
+- Shorter duration means higher RPS.
+- Longer duration means lower RPS.
+- Do not manually divide RPS by machine count. The script does same-region split.
+- `--duration` overrides all flow durations.
+- `--flow-id` + `--api-count` runs one custom flow instead of the default list.
+
+Print the calculated RPS before a test:
 
 ```bash
-/opt/homebrew/bin/bash scripts/run-test-v3.sh
+./scripts/run-test-v6.sh --dry-run --no-k8s --no-dstat --test 2
 ```
 
-Common overrides:
+Increase RPS for all flows by shortening duration:
 
 ```bash
-RUN_ID=my_debug_run DEFAULT_DURATION=30s ./scripts/run-test-v3.sh
-STREAM_UID=<stream-uid> STREAMER_UID=<streamer-uid> ./scripts/run-test-v3.sh
-RPS_DRAIN_TIMEOUT=60s ./scripts/run-test-v3.sh
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --duration 60s
 ```
 
-## Result Directory Layout
+Decrease RPS for all flows by lengthening duration:
 
-A run produces this local structure:
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --duration 900s
+```
+
+Run one custom flow only:
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 \
+  --flow-id 82 \
+  --api-count 2 \
+  --flow-name search_debug \
+  --flow-duration 180s
+```
+
+## Failure Recovery
+
+If the test fails or exits early, retry the same command first. Most failures
+are transient SSH, SCP, or remote load-generator issues.
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2
+```
+
+If a few flows already completed, resume using the same `RUN_ID` and the next
+flow name:
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 \
+  --run-id <RUN_ID> \
+  --start-flow <flow_name>
+```
+
+Example:
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 \
+  --run-id regional_api_coverage_v6_20260612_163047 \
+  --start-flow leaderboard_pre_soak
+```
+
+If Kubernetes metrics fail, rerun with `--no-k8s`:
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --test 2
+```
+
+If dstat fails or installation is noisy, rerun with `--no-dstat`:
+
+```bash
+./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2
+```
+
+If the local shell has issues, run with Bash directly:
+
+```bash
+/bin/bash scripts/run-test-v6.sh --no-k8s --test 2
+```
+
+## Sync Failed Or Missing Files
+
+If the run completed remotely but local copy failed, sync logs and summaries
+again with `scripts/sync-load-test-run-files.sh`.
+
+Always pass the v6 machine list. The sync helper's built-in default machine list
+is legacy Brazil-only.
+
+Sync all default flows for the 188.5k test:
+
+```bash
+scripts/sync-load-test-run-files.sh <RUN_ID> \
+  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03 load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-saudi-01 load-test-saudi-02 load-test-saudi-03 load-test-egypt-01 load-test-egypt-02"
+```
+
+Sync only a few flows:
+
+```bash
+scripts/sync-load-test-run-files.sh <RUN_ID> \
+  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02" \
+  --flows "feed_soak leaderboard_soak search_soak"
+```
+
+Force recopies even if local files already exist:
+
+```bash
+scripts/sync-load-test-run-files.sh <RUN_ID> \
+  --force \
+  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02"
+```
+
+Skip report regeneration while syncing:
+
+```bash
+scripts/sync-load-test-run-files.sh <RUN_ID> \
+  --no-report \
+  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02"
+```
+
+## Result Locations
+
+Every run prints a `RUN_ID` at the top. Results are saved under:
 
 ```text
 results/<RUN_ID>/
-  brazil-01/
-    loadtest_<RUN_ID>_brazil-01_<flow_name>.log
-    summary_<RUN_ID>_brazil-01_<flow_name>.txt
-  brazil-02/
-    loadtest_<RUN_ID>_brazil-02_<flow_name>.log
-    summary_<RUN_ID>_brazil-02_<flow_name>.txt
-  brazil-03/
-    loadtest_<RUN_ID>_brazil-03_<flow_name>.log
-    summary_<RUN_ID>_brazil-03_<flow_name>.txt
-  instance-metrics/
-    dstat_<RUN_ID>_brazil-01.log
-    dstat_<RUN_ID>_brazil-02.log
-    dstat_<RUN_ID>_brazil-03.log
-  k8s-cluster-metrics/
-    node_headroom.csv
-    pod_usage.csv
-    pod_network.csv
-  summary-csv/
-    report_sheet.csv
-    api_flow_summary.csv
-    api_flow_by_machine.csv
-    backend_service_health.csv
-    service_capacity.csv
-    ec2_headroom_summary.csv
-    load_generator_summary.csv
 ```
 
-Example latest-run lookup:
+Find the latest v6 run:
 
 ```bash
-latest=$(ls -td results/api_coverage_v1_* | head -1)
-find "$latest" -maxdepth 3 -type f | sort
+latest=$(ls -td results/regional_api_coverage_v6_* | head -1)
+echo "$latest"
 ```
 
-## CSV Summary Reports
+Load-test logs and per-flow summaries:
 
-`scripts/generate-load-test-report-csv.py` converts one result directory into
-spreadsheet-friendly CSV summaries.
+```text
+results/<RUN_ID>/<machine>/loadtest_<RUN_ID>_<machine>_<flow_name>.log
+results/<RUN_ID>/<machine>/summary_<RUN_ID>_<machine>_<flow_name>.txt
+```
 
-`run-test-v3.sh` runs it automatically after metrics are collected. Disable that
-step only when debugging the raw files:
+Example:
 
 ```bash
-GENERATE_CSV_REPORT=false ./scripts/run-test-v3.sh
+machine=load-test-brazil-lightnode-01
+less "$latest/$machine/loadtest_${latest##*/}_${machine}_feed_soak.log"
+cat "$latest/$machine/summary_${latest##*/}_${machine}_feed_soak.txt"
 ```
 
-Regenerate the report for an existing run:
+CSV reports:
+
+```text
+results/<RUN_ID>/summary-csv/
+```
+
+Important CSV files:
+
+| File | What it answers |
+|---|---|
+| `report_sheet.csv` | Single combined report for spreadsheet import. |
+| `api_flow_summary.csv` | Flow-level RPS, request totals, failures, error rate, and top errors. |
+| `api_flow_by_machine.csv` | Same counters split by machine. |
+| `load_generator_summary.csv` | Dstat-derived CPU, memory, and network by load generator. |
+| `backend_service_health.csv` | Kubernetes service health, restarts, HPA, and resource usage when k8s metrics exist. |
+| `service_capacity.csv` | Pod request/limit capacity when k8s metrics exist. |
+| `ec2_headroom_summary.csv` | EC2/node request and usage headroom when k8s metrics exist. |
+
+Regenerate CSV reports for an existing run:
 
 ```bash
 ./scripts/generate-load-test-report-csv.py results/<RUN_ID>
 ```
 
-Generated files:
+## Dstat Reports
 
-| File | Purpose |
-|---|---|
-| `report_sheet.csv` | Single sectioned CSV suitable for importing into a sheet. |
-| `api_flow_summary.csv` | Flow-level RPS, request totals, failed requests, error rate, and top error endpoints. |
-| `api_flow_by_machine.csv` | Same API/flow counters split by load generator. |
-| `backend_service_health.csv` | Authorization, Quests, and Loco Store readiness, restarts, HPA state, CPU/memory/network usage, and headroom. |
-| `service_capacity.csv` | Current pods, HPA min/max, app-only requests/limits, and total pod requests/limits. |
-| `ec2_headroom_summary.csv` | Cluster EC2/node CPU, memory, pod capacity, and request/usage headroom. |
-| `load_generator_summary.csv` | Dstat-derived average/peak CPU, memory, and network for each load generator. |
-| `report_notes.csv` | Caveats for values that cannot be captured from current logs. |
+Dstat is enabled by default unless `--no-dstat` is used.
 
-Latency percentiles are not generated because the current load-test logs do not
-contain P90/P95/P99 values. API values are flow-level for bundled flows; the logs
-do not contain clean per-endpoint success counters.
-
-## Load Test Logs
-
-Each `loadtest_*.log` is copied from the corresponding remote load generator after the flow finishes.
-
-Typical contents include:
-
-- Go/Fiber startup output.
-- Direct runner configuration such as `run_id`, `flow_id`, `total_users`, or `target_rps`.
-- Flow execution errors, if any.
-- Per-run counters such as:
+Raw dstat files:
 
 ```text
-TargetRPS=<value>
-ActualRPS=<value>
-Users=<value>
-Req/User=<value>
-TheoreticalRPS=<value>
-TotalRequestsSent=<value>
-SuccessfulRequests=<value>
-FailedRequests=<value>
+results/<RUN_ID>/instance-metrics/dstat_<RUN_ID>_<machine>.log
 ```
 
-Use these logs to answer:
-
-- Did the flow start?
-- Did an API fail with a status code or application error?
-- Did actual RPS reach expected RPS?
-- How many requests succeeded or failed on that machine for that flow?
-
-## Summary Files
-
-Each `summary_*.txt` is created remotely before and after the flow, then copied locally.
-
-Typical fields:
+CSV summary derived from dstat:
 
 ```text
-Machine=<machine>
-FlowName=<flow name>
-FlowID=<flow id>
-TargetRPS=<target rps>
-Workers=<worker count>
-Duration=<duration>
-LoadGenerators=<machine count>
-LoadGeneratorIndex=<index>
-StreamUID=<stream uid>
-StreamerUID=<streamer uid>
-RunID=<flow run id>
-StartTimeIST=<flow start time>
-GoBinary=<remote go binary>
-GoVersion=<remote go version>
-ExitCode=<remote command exit code>
-EndTimeIST=<flow end time>
+results/<RUN_ID>/summary-csv/load_generator_summary.csv
 ```
-
-Use summaries to map each flow's start and end time, especially when comparing against dstat metrics.
-
-## Dstat Metrics Reports
-
-Dstat is currently collected once per machine for the entire test run.
-
-It is not split per flow.
-
-The metrics start before the first flow and stop after the last flow. Therefore each file is one continuous timeline for all flows:
-
-```text
-dstat_<RUN_ID>_brazil-01.log
-dstat_<RUN_ID>_brazil-02.log
-dstat_<RUN_ID>_brazil-03.log
-```
-
-To analyze a specific flow:
-
-1. Open that flow's `summary_*.txt`.
-2. Read `StartTimeIST` and `EndTimeIST`.
-3. Open the matching machine's `dstat_*.log`.
-4. Compare rows within that timestamp window.
 
 Example:
 
 ```bash
-latest=$(ls -td results/api_coverage_v1_* | head -1)
-cat "$latest/brazil-01/summary_${latest##*/}_brazil-01_auth_signup_bundle.txt"
-less "$latest/instance-metrics/dstat_${latest##*/}_brazil-01.log"
-```
-
-## End-To-End Execution Order
-
-`run-test-v3.sh` performs this sequence:
-
-```text
-create RUN_ID
-create results/<RUN_ID>/
-create results/<RUN_ID>/instance-metrics/
-create results/<RUN_ID>/k8s-cluster-metrics/
-ensure dstat on all machines
-ssh preflight all machines
-start dstat on all machines
-start Kubernetes metrics on my-machine
-run flow 24 on all machines in parallel
-copy flow 24 logs and summaries
-run flow 69 on all machines in parallel
-copy flow 69 logs and summaries
-run flow 10 on all machines in parallel
-copy flow 10 logs and summaries
-run flow 11 on all machines in parallel
-copy flow 11 logs and summaries
-run flow 33 on all machines in parallel
-copy flow 33 logs and summaries
-run flow 64 on all machines in parallel
-copy flow 64 logs and summaries
-run flow 65 on all machines in parallel
-copy flow 65 logs and summaries
-run flow 66 on all machines in parallel
-copy flow 66 logs and summaries
-run flow 67 on all machines in parallel
-copy flow 67 logs and summaries
-run flow 68 on all machines in parallel
-copy flow 68 logs and summaries
-run flow 63 on all machines in parallel
-copy flow 63 logs and summaries
-run flow 57 on all machines in parallel
-copy flow 57 logs and summaries
-run flow 56 on all machines in parallel
-copy flow 56 logs and summaries
-run flow 6 on all machines in parallel
-copy flow 6 logs and summaries
-run flow 72 on all machines in parallel
-copy flow 72 logs and summaries
-run flow 59 on all machines in parallel
-copy flow 59 logs and summaries
-run flow 58 on all machines in parallel
-copy flow 58 logs and summaries
-run flow 61 on all machines in parallel
-copy flow 61 logs and summaries
-run flow 62 on all machines in parallel
-copy flow 62 logs and summaries
-run flow 34 on all machines in parallel
-copy flow 34 logs and summaries
-stop dstat on all machines
-copy dstat logs into instance-metrics/
-stop Kubernetes metrics
-copy Kubernetes metrics into k8s-cluster-metrics/
-generate summary CSV files into summary-csv/
-exit with overall load-test status
-```
-
-If interrupted with Ctrl-C, the trap still attempts to stop and collect both
-metric collectors.
-
-## What To Check After A Run
-
-Check result root:
-
-```bash
-latest=$(ls -td results/api_coverage_v1_* | head -1)
-echo "$latest"
-```
-
-Check all expected files exist:
-
-```bash
-find "$latest" -maxdepth 3 -type f | sort
-```
-
-Check dstat files:
-
-```bash
 ls -lh "$latest/instance-metrics"
+cat "$latest/summary-csv/load_generator_summary.csv"
 ```
 
-Check Kubernetes cluster metrics:
+Dstat is one continuous file per machine for the whole run. It is not split per
+flow. To inspect one flow:
+
+1. Open that flow's `summary_*.txt`.
+2. Read `StartTimeIST` and `EndTimeIST`.
+3. Compare that time window in the matching `dstat_*.log`.
+
+## Kubernetes Reports
+
+Kubernetes metrics are disabled by default in v6. Use `--k8s` only when
+`ssh my-machine` and `kubectl` are working.
+
+Enable Kubernetes metrics:
 
 ```bash
-ls -lh "$latest/k8s-cluster-metrics"
+./scripts/run-test-v6.sh --k8s --test 2
 ```
 
-Check failures in load logs:
+Skip Kubernetes metrics:
 
 ```bash
-rg -n "ERR|FAILED|FailedRequests|statusCode:|error" "$latest"
+./scripts/run-test-v6.sh --no-k8s --test 2
 ```
 
-Check flow timings:
-
-```bash
-rg -n "FlowName=|StartTimeIST=|EndTimeIST=|ExitCode=" "$latest"/*/summary_*.txt
-```
-
-## Kubernetes Cluster Metrics
-
-`scripts/k8s-cluster-metrics.sh` collects Kubernetes-side metrics from the dev
-machine that has cluster access. It defaults to:
-
-```text
-ssh my-machine
-```
-
-The script runs `kubectl` on that host, writes remote files under:
-
-```text
-~/k8s-load-test-metrics/<RUN_ID>/
-```
-
-and copies them locally into:
+Raw Kubernetes metrics:
 
 ```text
 results/<RUN_ID>/k8s-cluster-metrics/
 ```
 
-`run-test-v3.sh` starts and stops this collector automatically by default.
-Disable it only when you cannot reach `ssh my-machine`:
+Important Kubernetes files:
 
-```bash
-COLLECT_K8S_METRICS=false ./scripts/run-test-v3.sh
-```
-
-Standalone usage around a load test:
-
-```bash
-RUN_ID="api_coverage_v1_$(date +%Y%m%d_%H%M%S)"
-
-RUN_ID="$RUN_ID" ./scripts/k8s-cluster-metrics.sh start
-RUN_ID="$RUN_ID" ./scripts/run-test-v3.sh
-RUN_ID="$RUN_ID" ./scripts/k8s-cluster-metrics.sh stop
-RUN_ID="$RUN_ID" ./scripts/k8s-cluster-metrics.sh collect
-```
-
-For a standalone timed capture:
-
-```bash
-K8S_DURATION_SECONDS=120 ./scripts/k8s-cluster-metrics.sh run
-```
-
-Useful overrides:
-
-```bash
-K8S_INTERVAL_SECONDS=10 \
-K8S_NODE_SUMMARY_CONCURRENCY=8 \
-K8S_NAMESPACES="authorization quests loco-store ivory ibiza" \
-K8S_DEPLOYMENTS="authorization/authorization-api-deployment quests/quests loco-store/loco-store-api-deployment ivory/feedv4 ivory/stream ivory/stream-playback ibiza/ibiza" \
-./scripts/k8s-cluster-metrics.sh run
-```
-
-Default namespaces now include:
-
-```text
-authorization quests loco-store ivory ibiza
-```
-
-Default deployment profiles now include the existing Auth, Quests, Loco Store,
-Ibiza, and HPA-targeted Ivory deployments:
-
-```text
-authorization/authorization-api-deployment
-quests/quests
-loco-store/loco-store-api-deployment
-ivory/admin
-ivory/dashboard
-ivory/instream
-ivory/apis-service
-ivory/feedv4
-ivory/sqs-service
-ivory/leaderboard
-ivory/leaderboard-sqs-service
-ivory/liu-sqs-service
-ivory/search
-ivory/stream
-ivory/stream-playback
-ibiza/ibiza
-```
-
-Primary files:
-
-| File | Purpose |
+| File | What it answers |
 |---|---|
-| `pod_usage.csv` | Per-container CPU and memory from kubelet summary stats. |
-| `pod_network.csv` | Per-pod RX/TX counters and RX/TX bit rates. |
-| `node_usage.csv` | Per-node CPU and memory from kubelet summary stats. |
-| `node_network.csv` | Per-node RX/TX counters and RX/TX bit rates. |
-| `node_headroom.csv` | EC2/Kubernetes node allocatable, requested, actual usage, and remaining headroom. |
-| `deployment_profiles.csv` | CPU/memory request footprint for selected deployment pods. |
-| `profile_headroom.csv` | Estimated additional pods per node and cluster total for selected deployment profiles. |
+| `node_headroom.csv` | Node CPU, memory, pod request headroom, and usage headroom. |
+| `pod_usage.csv` | Per-container CPU and memory usage. |
+| `pod_network.csv` | Per-pod network RX/TX counters and bit rates. |
+| `deployment_profiles.csv` | Request footprint for selected deployments. |
+| `profile_headroom.csv` | Estimated additional pods by deployment profile. |
 
-Pod-level CSVs are scoped by `K8S_NAMESPACES`. Node headroom is cluster-wide
-because Kubernetes scheduling capacity must include all non-terminal pods
-already placed on each node.
-
-`node_headroom.csv` is the main file for checking whether EC2 nodes are
-actually full. Scheduling headroom should be read from request headroom:
+CSV summaries derived from Kubernetes metrics:
 
 ```text
-cpu_request_headroom_m
-memory_request_headroom_mib
-pods_headroom
+results/<RUN_ID>/summary-csv/backend_service_health.csv
+results/<RUN_ID>/summary-csv/service_capacity.csv
+results/<RUN_ID>/summary-csv/ec2_headroom_summary.csv
 ```
 
-Actual usage headroom is also captured:
+If Kubernetes metrics fail, rerun with `--no-k8s`. The load-test logs and API
+CSV reports can still be used.
 
-```text
-cpu_usage_headroom_m
-memory_usage_headroom_mib
-```
+## What To Check After A Run
 
-Use request headroom for "can Kubernetes place more pods?" and usage headroom
-for "are existing EC2 nodes actually busy?"
-
-### Sampling Interval
-
-Use `5s` for short load tests around 30 seconds to 2 minutes. This gives enough
-points to see the ramp without hammering the Kubernetes API and every kubelet.
-
-Use `10s` for longer runs. Use `15s` to `30s` for soak tests.
-
-Avoid `1s` or `2s` as the default. CPU and HPA/KEDA signals are not normally
-meaningfully updated at that granularity, CloudWatch-backed KEDA metrics in this
-cluster use 60-second collection periods, and per-node kubelet summary scraping
-across the cluster can become noisy at 1-second intervals.
-
-For clusters with many nodes, `K8S_NODE_SUMMARY_CONCURRENCY=8` keeps per-node
-kubelet summary scraping bounded while still completing samples faster than a
-serial scrape. On stop, the collector waits for the current sample to complete
-before copying files; tune that with `K8S_STOP_GRACE_SECONDS` if a large cluster
-needs more time.
-
-## Troubleshooting
-
-### No dstat files were generated
-
-Likely causes:
-
-- The test was run from the wrong repo.
-- `scripts/run-test-v3.sh` did not call `scripts/instance-metrics.sh`.
-- `dstat` failed to start remotely.
-- `scp` failed during collect.
-
-Check:
+Find the latest run:
 
 ```bash
-pwd
-ls scripts/ensure-dstat.sh scripts/instance-metrics.sh scripts/run-test-v3.sh
-rg -n "instance-metrics|ensure-dstat|METRICS_DIR" scripts/run-test-v3.sh
+latest=$(ls -td results/regional_api_coverage_v6_* | head -1)
+echo "$latest"
 ```
 
-### `bad array subscript` or `declare -A: invalid option`
-
-This means an older shell or the wrong shell is running a script that uses unsupported Bash features. Current scripts avoid associative arrays, but they still require Bash, not `sh`.
-
-Run explicitly:
+List files:
 
 ```bash
-/bin/bash scripts/run-test-v3.sh
+find "$latest" -maxdepth 3 -type f | sort
 ```
 
-or:
+Check failures:
 
 ```bash
-/opt/homebrew/bin/bash scripts/run-test-v3.sh
+rg -n "ERR|FAILED|FailedRequests|statusCode:|error" "$latest"
 ```
 
-### `sshpass not found`
-
-Install `sshpass` locally before running the scripts.
-
-### `dstat missing; installing`
-
-This is expected on first run if `dstat` is absent on remote machines. The script attempts install through the remote package manager.
-
-### Dstat is present but logs are tiny or empty
-
-Check whether the load test exited very early. Also inspect:
+Check flow timing and exit codes:
 
 ```bash
-./scripts/instance-metrics.sh status
+rg -n "FlowName=|StartTimeIST=|EndTimeIST=|ExitCode=" "$latest"/*/summary_*.txt
 ```
 
-and remote files under:
+Open the main report:
 
-```text
-~/load-test/metrics/
+```bash
+cat "$latest/summary-csv/report_sheet.csv"
 ```
 
-## Notes For Future Bot Context
+## Notes For TGPT Or Future Operators
 
-- The active project for these scripts is `grafana-scrap`, not the separate `load-test` repo.
-- `scripts/run-test-v3.sh` is the only script a user normally needs to run.
-- `scripts/ensure-dstat.sh` only checks/installs dstat; it does not run the load test or collect metrics.
-- `scripts/instance-metrics.sh` is a helper used by `run-test-v3.sh`; do not ask the user to run it manually unless debugging metrics collection.
-- Dstat output is one file per machine for the whole test run, not one file per flow.
-- Flow-to-metrics mapping is done by comparing `summary_*.txt` `StartTimeIST`/`EndTimeIST` with dstat timestamps.
-- The scripts contain hard-coded machine addresses and passwords. Avoid printing those values in user-facing summaries unless the user explicitly asks.
+- Current script: `scripts/run-test-v6.sh`.
+- Current 188.5k command: `./scripts/run-test-v6.sh --no-k8s --test 2`.
+- Most stable no-metrics command: `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2`.
+- Use `--dry-run` to answer "what machines, flows, and RPS will this run use?"
+- Use `--machines` to run one region or any custom machine mix.
+- Use `--duration` to tune RPS for all flows.
+- Use `--flow-id` and `--api-count` to run one custom flow.
+- Use `--start-flow` with the same `--run-id` to resume a partial run.
+- Use `scripts/sync-load-test-run-files.sh` to recover missing local logs and summaries.
+- Dstat raw reports are under `results/<RUN_ID>/instance-metrics/`.
+- Kubernetes raw reports are under `results/<RUN_ID>/k8s-cluster-metrics/`.
+- CSV reports are under `results/<RUN_ID>/summary-csv/`.
+- The scripts contain machine connection details. Do not paste secrets into public places.

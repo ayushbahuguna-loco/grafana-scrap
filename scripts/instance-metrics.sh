@@ -11,6 +11,7 @@ REMOTE_DIR="${REMOTE_DIR:-load-test}"
 REMOTE_METRICS_DIR="${REMOTE_METRICS_DIR:-load-test/metrics}"
 LOCAL_METRICS_DIR="${LOCAL_METRICS_DIR:-results/$METRICS_RUN_ID/instance-metrics}"
 DSTAT_COMMAND="${DSTAT_COMMAND:-dstat -tcmn --tcp --top-cpu --top-mem 1}"
+SYSSTAT_COMMAND="${SYSSTAT_COMMAND:-sar -u -r -n DEV,TCP,ETCP 1}"
 SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-30}"
 SSH_ATTEMPTS="${SSH_ATTEMPTS:-5}"
 SSH_RETRY_DELAY_SECONDS="${SSH_RETRY_DELAY_SECONDS:-5}"
@@ -41,6 +42,9 @@ Usage:
 Default dstat command:
   dstat -tcmn --tcp --top-cpu --top-mem 1
 
+Fallback sysstat command when dstat is unavailable:
+  sar -u -r -n DEV,TCP,ETCP 1
+
 Examples:
   ./scripts/instance-metrics.sh run
 
@@ -54,6 +58,7 @@ Examples:
 Overrides:
   MACHINES_OVERRIDE="brazil-01 brazil-02 brazil-03 brazil-04" ./scripts/instance-metrics.sh run
   DSTAT_COMMAND="dstat -tcmn --tcp --top-cpu --top-mem 1" ./scripts/instance-metrics.sh start
+  SYSSTAT_COMMAND="sar -u -r -n DEV,TCP,ETCP 1" ./scripts/instance-metrics.sh start
   SSH_ATTEMPTS=5 SSH_RETRY_DELAY_SECONDS=5 ./scripts/instance-metrics.sh start
   METRICS_PARALLEL=true ./scripts/instance-metrics.sh start
 EOF
@@ -118,22 +123,29 @@ start_metric_machine() {
     log_file="$(remote_log_file "$machine")"
     pid_file="$(remote_pid_file "$machine")"
 
-    echo "[$machine] starting dstat"
+    echo "[$machine] starting instance metrics"
     ssh_machine "$machine" "
         mkdir -p $REMOTE_METRICS_DIR
-        if ! command -v dstat >/dev/null 2>&1; then
-            echo 'dstat not found' > $log_file
+        METRICS_COMMAND=''
+        if command -v dstat >/dev/null 2>&1; then
+            METRICS_COMMAND='$DSTAT_COMMAND'
+            echo 'metrics_command=dstat' > $log_file
+        elif command -v sar >/dev/null 2>&1; then
+            METRICS_COMMAND='$SYSSTAT_COMMAND'
+            echo 'metrics_command=sysstat-sar' > $log_file
+        else
+            echo 'dstat not found and sar fallback not found' > $log_file
             exit 1
         fi
         if [ -f $pid_file ] && kill -0 \$(cat $pid_file) >/dev/null 2>&1; then
-            echo 'dstat already running with pid '\$(cat $pid_file)
+            echo 'instance metrics already running with pid '\$(cat $pid_file)
             exit 0
         fi
         BUFFER_PREFIX=''
         if command -v stdbuf >/dev/null 2>&1; then
             BUFFER_PREFIX='stdbuf -oL -eL'
         fi
-        nohup sh -c \"\$BUFFER_PREFIX $DSTAT_COMMAND\" > $log_file 2>&1 &
+        nohup sh -c \"\$BUFFER_PREFIX \$METRICS_COMMAND\" >> $log_file 2>&1 &
         echo \$! > $pid_file
         echo 'started pid '\$(cat $pid_file)
     "

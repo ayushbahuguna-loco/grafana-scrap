@@ -72,16 +72,30 @@ ensure_machine() {
                 exit 1
             fi
 
+            if command -v sar >/dev/null 2>&1 && grep -Eq '^ID=\"?amzn\"?' /etc/os-release 2>/dev/null; then
+                echo 'dstat missing on Amazon Linux; sysstat fallback present: '\$(command -v sar)
+                exit 0
+            fi
+
             echo 'dstat missing; installing'
+
+            SUDO=''
+            if [ \"\$(id -u)\" -ne 0 ]; then
+                if ! command -v sudo >/dev/null 2>&1; then
+                    echo 'sudo is required to install dstat for non-root user'
+                    exit 1
+                fi
+                SUDO='sudo'
+            fi
 
             if command -v apt-get >/dev/null 2>&1; then
                 export DEBIAN_FRONTEND=noninteractive
-                apt-get update
-                apt-get install -y dstat || apt-get install -y pcp
+                \$SUDO env DEBIAN_FRONTEND=noninteractive apt-get update
+                \$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y dstat || \$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y pcp
             elif command -v dnf >/dev/null 2>&1; then
-                dnf install -y dstat || dnf install -y pcp
+                \$SUDO dnf install -y dstat || \$SUDO dnf install -y pcp
             elif command -v yum >/dev/null 2>&1; then
-                yum install -y dstat || yum install -y pcp
+                \$SUDO yum install -y dstat || \$SUDO yum install -y pcp
             else
                 echo 'No supported package manager found'
                 exit 1
@@ -93,7 +107,12 @@ ensure_machine() {
                 exit 0
             fi
 
-            echo 'dstat still missing after install'
+            if command -v sar >/dev/null 2>&1; then
+                echo 'dstat still missing after install; sysstat fallback present: '\$(command -v sar)
+                exit 0
+            fi
+
+            echo 'dstat still missing after install and no sysstat fallback found'
             exit 1
         "
 }

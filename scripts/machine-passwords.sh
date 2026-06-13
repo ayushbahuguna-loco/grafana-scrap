@@ -7,29 +7,33 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 machine_host() {
     case "$1" in
-        brazil-01) printf '%s\n' '130.94.106.105' ;;
-        brazil-02) printf '%s\n' '130.94.107.80' ;;
-        brazil-03) printf '%s\n' '130.94.107.139' ;;
-        brazil-04) printf '%s\n' '130.94.106.176' ;;
-        philippines-01|load-test-linux-philippines-01) printf '%s\n' 'ec2-18-140-61-84.ap-southeast-1.compute.amazonaws.com' ;;
-        philippines-02) printf '%s\n' '38.54.36.76' ;;
-        philippines-03) printf '%s\n' '38.54.87.127' ;;
-        turkey-01) printf '%s\n' '38.60.208.217' ;;
-        turkey-02) printf '%s\n' '130.94.1.175' ;;
-        turkey-03) printf '%s\n' '38.54.105.77' ;;
-        egypt-01|load-test-egypt-01) printf '%s\n' '38.54.59.190' ;;
-        egypt-02|load-test-egypt-02) printf '%s\n' '38.60.226.10' ;;
+        brazil-01|load-test-brazil-lightnode-01) printf '%s\n' '56.125.77.76' ;;
+        brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '18.230.203.21' ;;
+        brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '18.230.213.173' ;;
+        brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '54.233.42.222' ;;
+        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.145.161' ;;
+        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.145.242' ;;
+        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.146.199' ;;
+        turkey-01|load-test-turkey-01) printf '%s\n' '130.94.1.185' ;;
+        turkey-02|load-test-turkey-02) printf '%s\n' '130.94.0.169' ;;
+        turkey-03|load-test-turkey-03) printf '%s\n' '130.94.1.37' ;;
+        egypt-01|load-test-egypt-01) printf '%s\n' '38.60.226.43' ;;
+        egypt-02|load-test-egypt-02) printf '%s\n' '38.54.59.95' ;;
         egypt-03|load-test-egypt-03) printf '%s\n' '38.60.226.153' ;;
-        saudi-01|load-test-saudi-01) printf '%s\n' '130.94.58.123' ;;
-        saudi-02|load-test-saudi-02) printf '%s\n' '130.94.58.144' ;;
-        saudi-03|load-test-saudi-03) printf '%s\n' '130.94.57.133' ;;
+        saudi-01|load-test-saudi-01) printf '%s\n' '130.94.58.105' ;;
+        saudi-02|load-test-saudi-02) printf '%s\n' '130.94.59.246' ;;
+        saudi-03|load-test-saudi-03) printf '%s\n' '130.94.58.179' ;;
+        iraq-01|load-test-iraq-01) printf '%s\n' '38.60.190.170' ;;
+        qatar-01|load-test-qatar-01) printf '%s\n' '149.104.121.57' ;;
+        kuwait-01|load-test-kuwait-01) printf '%s\n' '130.94.82.217' ;;
+        bahrain-01|load-test-bahrain-01) printf '%s\n' '149.104.106.7' ;;
         *) return 1 ;;
     esac
 }
 
 machine_user() {
     case "$1" in
-        philippines-01|load-test-linux-philippines-01) printf '%s\n' 'ec2-user' ;;
+        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03) printf '%s\n' 'ec2-user' ;;
         *) printf '%s\n' 'root' ;;
     esac
 }
@@ -43,8 +47,8 @@ resolve_repo_path() {
 
 machine_identity_file() {
     case "$1" in
-        philippines-01|load-test-linux-philippines-01)
-            resolve_repo_path "${PHILIPPINES_SSH_KEY:-philly.pem}"
+        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03)
+            resolve_repo_path "${PHILIPPINES_SSH_KEY:-load-test-linux-philippines-01.pem}"
             ;;
         *) return 1 ;;
     esac
@@ -60,11 +64,14 @@ machine_auth_type() {
 
 machine_password_env_name() {
     case "$1" in
-        brazil-01|brazil-02|brazil-03|brazil-04) printf '%s\n' 'BRAZIL_ROOT_PASSWORD' ;;
-        philippines-02|philippines-03) printf '%s\n' 'PHILIPPINES_ROOT_PASSWORD' ;;
-        turkey-01|turkey-02|turkey-03) printf '%s\n' 'TURKEY_ROOT_PASSWORD' ;;
+        brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04) printf '%s\n' 'BRAZIL_LIGHTNODE_PASSWORD' ;;
+        turkey-01|turkey-02|turkey-03|load-test-turkey-01|load-test-turkey-02|load-test-turkey-03) printf '%s\n' 'TURKEY_ROOT_PASSWORD' ;;
         egypt-01|egypt-02|egypt-03|load-test-egypt-01|load-test-egypt-02|load-test-egypt-03) printf '%s\n' 'EGYPT_ROOT_PASSWORD' ;;
         saudi-01|saudi-02|saudi-03|load-test-saudi-01|load-test-saudi-02|load-test-saudi-03) printf '%s\n' 'SAUDI_ROOT_PASSWORD' ;;
+        iraq-01|load-test-iraq-01) printf '%s\n' 'IRAQ_ROOT_PASSWORD' ;;
+        qatar-01|load-test-qatar-01) printf '%s\n' 'QATAR_ROOT_PASSWORD' ;;
+        kuwait-01|load-test-kuwait-01) printf '%s\n' 'KUWAIT_ROOT_PASSWORD' ;;
+        bahrain-01|load-test-bahrain-01) printf '%s\n' 'BAHRAIN_ROOT_PASSWORD' ;;
         *) return 1 ;;
     esac
 }
@@ -125,6 +132,8 @@ machine_ssh() {
     local identity_file
     local password
     local timeout
+    local server_alive_interval
+    local server_alive_count_max
 
     host="$(machine_host "$machine" || true)"
     if [ -z "$host" ]; then
@@ -134,7 +143,9 @@ machine_ssh() {
 
     user="$(machine_user "$machine")"
     auth_type="$(machine_auth_type "$machine")"
-    timeout="${SSH_CONNECT_TIMEOUT:-30}"
+    timeout="${SSH_CONNECT_TIMEOUT:-120}"
+    server_alive_interval="${SSH_SERVER_ALIVE_INTERVAL:-30}"
+    server_alive_count_max="${SSH_SERVER_ALIVE_COUNT_MAX:-6}"
 
     if [ "$auth_type" = "key" ]; then
         identity_file="$(machine_identity_file "$machine")"
@@ -146,6 +157,8 @@ machine_ssh() {
         ssh \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout="$timeout" \
+            -o ServerAliveInterval="$server_alive_interval" \
+            -o ServerAliveCountMax="$server_alive_count_max" \
             -i "$identity_file" \
             "$user@$host" \
             "$@"
@@ -161,7 +174,9 @@ machine_ssh() {
         ssh \
         -o StrictHostKeyChecking=no \
         -o ConnectTimeout="$timeout" \
-        -o PreferredAuthentications=password \
+        -o ServerAliveInterval="$server_alive_interval" \
+        -o ServerAliveCountMax="$server_alive_count_max" \
+        -o PreferredAuthentications=password,keyboard-interactive \
         -o PubkeyAuthentication=no \
         -o NumberOfPasswordPrompts=1 \
         "$user@$host" \
@@ -179,6 +194,8 @@ machine_scp_from() {
     local identity_file
     local password
     local timeout
+    local server_alive_interval
+    local server_alive_count_max
 
     host="$(machine_host "$machine" || true)"
     if [ -z "$host" ]; then
@@ -188,7 +205,9 @@ machine_scp_from() {
 
     user="$(machine_user "$machine")"
     auth_type="$(machine_auth_type "$machine")"
-    timeout="${SSH_CONNECT_TIMEOUT:-30}"
+    timeout="${SSH_CONNECT_TIMEOUT:-120}"
+    server_alive_interval="${SSH_SERVER_ALIVE_INTERVAL:-30}"
+    server_alive_count_max="${SSH_SERVER_ALIVE_COUNT_MAX:-6}"
 
     if [ "$auth_type" = "key" ]; then
         identity_file="$(machine_identity_file "$machine")"
@@ -200,6 +219,8 @@ machine_scp_from() {
         scp \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout="$timeout" \
+            -o ServerAliveInterval="$server_alive_interval" \
+            -o ServerAliveCountMax="$server_alive_count_max" \
             -i "$identity_file" \
             "$user@$host:$remote_file" \
             "$local_target"
@@ -215,7 +236,9 @@ machine_scp_from() {
         scp \
         -o StrictHostKeyChecking=no \
         -o ConnectTimeout="$timeout" \
-        -o PreferredAuthentications=password \
+        -o ServerAliveInterval="$server_alive_interval" \
+        -o ServerAliveCountMax="$server_alive_count_max" \
+        -o PreferredAuthentications=password,keyboard-interactive \
         -o PubkeyAuthentication=no \
         -o NumberOfPasswordPrompts=1 \
         "$user@$host:$remote_file" \
