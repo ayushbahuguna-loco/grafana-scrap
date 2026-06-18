@@ -7,13 +7,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 machine_host() {
     case "$1" in
-        brazil-01|load-test-brazil-lightnode-01) printf '%s\n' '56.125.77.76' ;;
-        brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '18.230.203.21' ;;
-        brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '18.230.213.173' ;;
-        brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '54.233.42.222' ;;
-        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.145.161' ;;
-        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.145.242' ;;
-        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.146.199' ;;
+        brazil-01|load-test-brazil-lightnode-01) printf '%s\n' '15.228.76.228' ;;
+        brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '18.231.135.223' ;;
+        brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '18.230.203.17' ;;
+        brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '54.207.158.199' ;;
+        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.146.125' ;;
+        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.144.231' ;;
+        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.145.227' ;;
         turkey-01|load-test-turkey-01) printf '%s\n' '130.94.1.185' ;;
         turkey-02|load-test-turkey-02) printf '%s\n' '130.94.0.169' ;;
         turkey-03|load-test-turkey-03) printf '%s\n' '130.94.1.37' ;;

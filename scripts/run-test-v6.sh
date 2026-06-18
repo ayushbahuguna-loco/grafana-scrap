@@ -14,7 +14,7 @@ cd "$REPO_ROOT" || exit 1
 SCRIPT_VERSION="regional_api_coverage_v6"
 DEFAULT_DURATION="${DEFAULT_DURATION:-120s}"
 RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-60s}"
-STREAM_UID="${STREAM_UID:-95143769-1681-4755-8847-8aaaad900f4c}"
+STREAM_UID="${STREAM_UID:-84e72fbf-f226-47ab-926b-55e9b2142e31}"
 STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # Regional target model:
@@ -173,6 +173,8 @@ COLLECT_INSTANCE_METRICS="${COLLECT_INSTANCE_METRICS:-true}"
 COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-false}"
 GENERATE_CSV_REPORT="${GENERATE_CSV_REPORT:-true}"
 DRY_RUN="${DRY_RUN:-false}"
+SSH_RETRY_ATTEMPTS="${SSH_RETRY_ATTEMPTS:-3}"
+SSH_RETRY_DELAY_SECONDS="${SSH_RETRY_DELAY_SECONDS:-5}"
 DURATION_OVERRIDE=""
 MACHINE_PRESET="${MACHINE_PRESET:-middle-east}"
 START_FLOW_NAME="${START_FLOW_NAME:-}"
@@ -220,6 +222,7 @@ Run flags:
 
 Environment overrides still work:
   MACHINE_PRESET=test2 DEFAULT_DURATION=60s COLLECT_K8S_METRICS=true ./scripts/run-test-v6.sh
+  SSH_RETRY_ATTEMPTS=3 SSH_RETRY_DELAY_SECONDS=5 ./scripts/run-test-v6.sh --test 2
 
 Examples:
   ./scripts/run-test-v6.sh --no-k8s
@@ -870,6 +873,59 @@ fi
 MACHINES_OVERRIDE_VALUE="${MACHINES[*]}"
 INSTANCE_METRICS_MACHINES_VALUE="${INSTANCE_METRICS_MACHINES_OVERRIDE:-$MACHINES_OVERRIDE_VALUE}"
 
+machine_ssh_retry() {
+    local machine="$1"
+    shift
+
+    local attempt=1
+    local status=0
+
+    while true
+    do
+        machine_ssh "$machine" "$@"
+        status=$?
+
+        if [ "$status" -eq 0 ]; then
+            return 0
+        fi
+
+        if [ "$status" -ne 255 ] || [ "$attempt" -ge "$SSH_RETRY_ATTEMPTS" ]; then
+            return "$status"
+        fi
+
+        echo "[$machine] SSH transport failed with exit $status; retrying attempt $((attempt + 1))/$SSH_RETRY_ATTEMPTS after ${SSH_RETRY_DELAY_SECONDS}s"
+        sleep "$SSH_RETRY_DELAY_SECONDS"
+        attempt=$((attempt + 1))
+    done
+}
+
+machine_scp_from_retry() {
+    local machine="$1"
+    local remote_file="$2"
+    local local_target="$3"
+
+    local attempt=1
+    local status=0
+
+    while true
+    do
+        machine_scp_from "$machine" "$remote_file" "$local_target"
+        status=$?
+
+        if [ "$status" -eq 0 ]; then
+            return 0
+        fi
+
+        if [ "$status" -ne 255 ] || [ "$attempt" -ge "$SSH_RETRY_ATTEMPTS" ]; then
+            return "$status"
+        fi
+
+        echo "[$machine] SCP transport failed with exit $status; retrying attempt $((attempt + 1))/$SSH_RETRY_ATTEMPTS after ${SSH_RETRY_DELAY_SECONDS}s"
+        sleep "$SSH_RETRY_DELAY_SECONDS"
+        attempt=$((attempt + 1))
+    done
+}
+
 collect_run_artifacts() {
     local artifact_flow_index
     local flow_name
@@ -912,7 +968,7 @@ collect_run_artifacts() {
             mkdir -p "results/$RUN_ID/$machine"
 
             # Download log
-            if machine_scp_from "$machine" "load-test/$log_file" "results/$RUN_ID/$machine/"
+            if machine_scp_from_retry "$machine" "load-test/$log_file" "results/$RUN_ID/$machine/"
             then
                 echo "[$machine][$flow_name] ✅ log copied"
             else
@@ -921,7 +977,7 @@ collect_run_artifacts() {
             fi
 
             # Download summary
-            if machine_scp_from "$machine" "load-test/$summary_file" "results/$RUN_ID/$machine/"
+            if machine_scp_from_retry "$machine" "load-test/$summary_file" "results/$RUN_ID/$machine/"
             then
                 echo "[$machine][$flow_name] ✅ summary copied"
             else
@@ -1152,7 +1208,7 @@ do
         exit 1
     fi
 
-    if machine_ssh "$machine" "hostname" >/dev/null
+    if machine_ssh_retry "$machine" "hostname" >/dev/null
     then
         echo "✅ $machine"
     else
@@ -1248,7 +1304,7 @@ do
 
         echo "[$machine][$flow_name] Region=$region_label UsersK=$users_k RegionMachines=$region_machine_count FlowID=$flow_id ApiCount=$api_count RegionalTargetRPS=$regional_target_rps LocalTargetRPS=$local_target_rps RemoteTargetRPS=$remote_target_rps Duration=$duration"
 
-        machine_ssh "$machine" "
+        machine_ssh_retry "$machine" "
             cd ~/load-test || exit 1
 
             LOG_FILE=$log_file
