@@ -19,6 +19,7 @@ TARGET_DEPLOYMENTS = {
     ("authorization", "authorization-api-deployment"): "Authorization",
     ("quests", "quests"): "Quests",
     ("loco-store", "loco-store-api-deployment"): "Loco Store",
+    ("feed-service", "feed-api-deployment"): "Feed API",
     ("ivory", "admin"): "Ivory Admin",
     ("ivory", "dashboard"): "Ivory Dashboard",
     ("ivory", "instream"): "Ivory Instream",
@@ -455,7 +456,9 @@ def hpa_by_deployment(hpas: dict[str, Any]) -> dict[tuple[str, str], dict[str, A
         if not target:
             continue
         status = hpa.get("status", {})
-        current_metrics = status.get("currentMetrics", [])
+        # Kubernetes serializes an unavailable HPA metric set as JSON null.
+        # Treat it like an empty list so report generation still succeeds.
+        current_metrics = status.get("currentMetrics") or []
         metric_parts: list[str] = []
         for metric in current_metrics:
             metric_type = metric.get("type", "")

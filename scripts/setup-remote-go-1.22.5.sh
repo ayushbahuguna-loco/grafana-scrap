@@ -133,7 +133,7 @@ go version
 if [ "$RUN_GO_BUILD" = "true" ] && [ -d "$HOME/load-test" ]; then
     cd "$HOME/load-test"
     go mod download
-    go build .
+    go build -o "$tmp_dir/load-test-build-check" .
 fi
 REMOTE
     then

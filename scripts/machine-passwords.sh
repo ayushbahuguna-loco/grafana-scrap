@@ -7,16 +7,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 machine_host() {
     case "$1" in
-        brazil-01|load-test-brazil-lightnode-01) printf '%s\n' '15.228.76.228' ;;
-        brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '18.231.135.223' ;;
-        brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '18.230.203.17' ;;
-        brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '54.207.158.199' ;;
-        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.146.125' ;;
-        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.144.231' ;;
-        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.145.227' ;;
-        turkey-01|load-test-turkey-01) printf '%s\n' '130.94.1.185' ;;
-        turkey-02|load-test-turkey-02) printf '%s\n' '130.94.0.169' ;;
-        turkey-03|load-test-turkey-03) printf '%s\n' '130.94.1.37' ;;
+        brazil-01|load-test-brazil-lightnode-01) printf '%s\n' '18.230.215.253' ;;
+        brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '15.229.156.10' ;;
+        brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '56.124.115.213' ;;
+        brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '15.228.91.56' ;;
+        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.146.216' ;;
+        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.146.214' ;;
+        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.146.26' ;;
+        turkey-01|load-test-turkey-01) printf '%s\n' '130.94.0.175' ;;
+        turkey-02|load-test-turkey-02) printf '%s\n' '130.94.1.122' ;;
+        turkey-03|load-test-turkey-03) printf '%s\n' '38.60.255.62' ;;
+        vietnam-01|load-test-vietnam-01) printf '%s\n' '45.57.128.159' ;;
+        vietnam-02|load-test-vietnam-02) printf '%s\n' '45.57.128.110' ;;
         egypt-01|load-test-egypt-01) printf '%s\n' '38.60.226.43' ;;
         egypt-02|load-test-egypt-02) printf '%s\n' '38.54.59.95' ;;
         egypt-03|load-test-egypt-03) printf '%s\n' '38.60.226.153' ;;
@@ -33,7 +35,8 @@ machine_host() {
 
 machine_user() {
     case "$1" in
-        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03) printf '%s\n' 'ec2-user' ;;
+        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03|vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02) printf '%s\n' 'ec2-user' ;;
+        brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04) printf '%s\n' 'ubuntu' ;;
         *) printf '%s\n' 'root' ;;
     esac
 }
@@ -47,8 +50,14 @@ resolve_repo_path() {
 
 machine_identity_file() {
     case "$1" in
+        brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04)
+            resolve_repo_path "${BRAZIL_SSH_KEY:-load-test-brazil-set.pem}"
+            ;;
         philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03)
-            resolve_repo_path "${PHILIPPINES_SSH_KEY:-load-test-linux-philippines-01.pem}"
+            resolve_repo_path "${PHILIPPINES_SSH_KEY:-load-test-vietnam-1-sept.pem}"
+            ;;
+        vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02)
+            resolve_repo_path "${VIETNAM_SSH_KEY:-load-test-vietnam-1-sept.pem}"
             ;;
         *) return 1 ;;
     esac
@@ -62,10 +71,12 @@ machine_auth_type() {
     fi
 }
 
-machine_password_env_name() {
+machine_password_env_names() {
     case "$1" in
         brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04) printf '%s\n' 'BRAZIL_LIGHTNODE_PASSWORD' ;;
-        turkey-01|turkey-02|turkey-03|load-test-turkey-01|load-test-turkey-02|load-test-turkey-03) printf '%s\n' 'TURKEY_ROOT_PASSWORD' ;;
+        turkey-01|load-test-turkey-01) printf '%s\n' 'TURKEY_01_ROOT_PASSWORD' 'TURKEY_ROOT_PASSWORD' ;;
+        turkey-02|load-test-turkey-02) printf '%s\n' 'TURKEY_02_ROOT_PASSWORD' 'TURKEY_ROOT_PASSWORD' ;;
+        turkey-03|load-test-turkey-03) printf '%s\n' 'TURKEY_03_ROOT_PASSWORD' 'TURKEY_ROOT_PASSWORD' ;;
         egypt-01|egypt-02|egypt-03|load-test-egypt-01|load-test-egypt-02|load-test-egypt-03) printf '%s\n' 'EGYPT_ROOT_PASSWORD' ;;
         saudi-01|saudi-02|saudi-03|load-test-saudi-01|load-test-saudi-02|load-test-saudi-03) printf '%s\n' 'SAUDI_ROOT_PASSWORD' ;;
         iraq-01|load-test-iraq-01) printf '%s\n' 'IRAQ_ROOT_PASSWORD' ;;
@@ -80,16 +91,20 @@ machine_password() {
     local machine="${1:-}"
     local env_name
     local password
+    local env_names
 
-    env_name="$(machine_password_env_name "$machine")" || return 1
-    password="${!env_name:-}"
+    env_names="$(machine_password_env_names "$machine")" || return 1
+    while IFS= read -r env_name; do
+        password="${!env_name:-}"
+        if [ -n "$password" ]; then
+            printf '%s\n' "$password"
+            return 0
+        fi
+    done <<< "$env_names"
 
-    if [ -z "$password" ]; then
-        printf 'Missing %s for %s. Set it in .env or export it before running.\n' "$env_name" "$machine" >&2
-        return 1
-    fi
-
-    printf '%s\n' "$password"
+    printf 'Missing password for %s. Set one of these in .env or export it before running: %s\n' \
+        "$machine" "$(printf '%s' "$env_names" | tr '\n' ' ')" >&2
+    return 1
 }
 
 require_machine_ssh_tools() {

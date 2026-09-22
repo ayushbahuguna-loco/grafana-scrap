@@ -8,8 +8,8 @@ K8S_INTERVAL_SECONDS="${K8S_INTERVAL_SECONDS:-5}"
 K8S_DURATION_SECONDS="${K8S_DURATION_SECONDS:-0}"
 K8S_REMOTE_BASE_DIR="${K8S_REMOTE_BASE_DIR:-k8s-load-test-metrics}"
 K8S_LOCAL_DIR="${K8S_LOCAL_DIR:-results/$K8S_RUN_ID/k8s-cluster-metrics}"
-DEFAULT_K8S_NAMESPACES="authorization quests loco-store ivory ibiza"
-DEFAULT_K8S_DEPLOYMENTS="authorization/authorization-api-deployment quests/quests loco-store/loco-store-api-deployment ivory/admin ivory/dashboard ivory/instream ivory/apis-service ivory/feedv4 ivory/sqs-service ivory/leaderboard ivory/leaderboard-sqs-service ivory/liu-sqs-service ivory/search ivory/stream ivory/stream-playback ibiza/ibiza"
+DEFAULT_K8S_NAMESPACES="authorization quests loco-store ivory ibiza feed-service"
+DEFAULT_K8S_DEPLOYMENTS="authorization/authorization-api-deployment quests/quests loco-store/loco-store-api-deployment ivory/admin ivory/dashboard ivory/instream ivory/apis-service ivory/feedv4 ivory/sqs-service ivory/leaderboard ivory/leaderboard-sqs-service ivory/liu-sqs-service ivory/search ivory/stream ivory/stream-playback ibiza/ibiza feed-service/feed-api-deployment"
 K8S_NAMESPACES="${K8S_NAMESPACES:-$DEFAULT_K8S_NAMESPACES}"
 K8S_DEPLOYMENTS="${K8S_DEPLOYMENTS:-$DEFAULT_K8S_DEPLOYMENTS}"
 K8S_NODE_LABEL_SELECTOR="${K8S_NODE_LABEL_SELECTOR:-}"
@@ -43,8 +43,13 @@ Useful examples:
   K8S_DURATION_SECONDS=120 ./scripts/k8s-cluster-metrics.sh run
 
   K8S_INTERVAL_SECONDS=10 \
-  K8S_NAMESPACES="authorization quests loco-store ivory ibiza" \
-  K8S_DEPLOYMENTS="authorization/authorization-api-deployment quests/quests loco-store/loco-store-api-deployment ivory/feedv4 ivory/stream ivory/stream-playback ibiza/ibiza" \
+  K8S_NAMESPACES="authorization quests loco-store ivory ibiza feed-service" \
+  K8S_DEPLOYMENTS="authorization/authorization-api-deployment quests/quests loco-store/loco-store-api-deployment ivory/feedv4 ivory/stream ivory/stream-playback ibiza/ibiza feed-service/feed-api-deployment" \
+  ./scripts/k8s-cluster-metrics.sh run
+
+  K8S_NAMESPACES="feed-service" \
+  K8S_DEPLOYMENTS="feed-service/feed-api-deployment" \
+  K8S_DURATION_SECONDS=120 \
   ./scripts/k8s-cluster-metrics.sh run
 
 Environment overrides:

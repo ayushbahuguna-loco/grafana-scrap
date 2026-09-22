@@ -14,7 +14,7 @@ cd "$REPO_ROOT" || exit 1
 SCRIPT_VERSION="regional_api_coverage_v6"
 DEFAULT_DURATION="${DEFAULT_DURATION:-120s}"
 RPS_DRAIN_TIMEOUT="${RPS_DRAIN_TIMEOUT:-60s}"
-STREAM_UID="${STREAM_UID:-84e72fbf-f226-47ab-926b-55e9b2142e31}"
+STREAM_UID="${STREAM_UID:-c8de680e-b79d-4a78-94be-1b7d6b59cf08}"
 STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 
 # Regional target model:
@@ -24,7 +24,8 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 # Region user inputs:
 #   Brazil:        79.5k users  -> load-test-brazil-lightnode-01..04
 #   Turkey:        55k users    -> load-test-turkey-01..03
-#   Philippines:   18k users    -> load-test-linux-philippines-01..03
+#   Vietnam:       VIETNAM_USERS_K -> load-test-vietnam-01..02
+#   Philippines:   55k users    -> load-test-linux-philippines-01..03
 #   Saudi:         22.5k users  -> saudi-01..03 / load-test-saudi-01..03
 #   Egypt:         13.5k users  -> egypt-01..02 / load-test-egypt-01..02
 #   Iraq:          7.2k users   -> load-test-iraq-01
@@ -42,6 +43,8 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 #   79 chat          = 3
 #   80 quest_rewards = 2
 #   82 search        = 2
+#   83 flow_83       = 6
+#   91 feed_v5_webhome = 1
 #
 # The Go runner splits TARGET_RPS by LOAD_GENERATORS. To avoid distributing one
 # target across unrelated regions, this script passes:
@@ -69,6 +72,12 @@ FLOW_NAMES=(
     search_pre_soak
     search_burst
     search_soak
+    flow_83_pre_soak
+    flow_83_burst
+    flow_83_soak
+    feed_v5_webhome_pre_soak
+    feed_v5_webhome_burst
+    feed_v5_webhome_soak
 )
 
 FLOW_IDS=(
@@ -93,6 +102,12 @@ FLOW_IDS=(
     82
     82
     82
+    83
+    83
+    83
+    91
+    91
+    91
 )
 
 FLOW_API_COUNTS=(
@@ -102,6 +117,9 @@ FLOW_API_COUNTS=(
   6
   6
   6
+  1
+  1
+  1
   6
   6
   6
@@ -117,10 +135,19 @@ FLOW_API_COUNTS=(
   2
   2
   2
+  6
+  6
+  6
 )
 
 # 0 lets the Go runner default workers to this generator's assigned local RPS.
 FLOW_RPS_WORKERS=(
+  0
+  0
+  0
+  0
+  0
+  0
   0
   0
   0
@@ -167,6 +194,12 @@ FLOW_DURATIONS=(
   180s
   60s
   600s
+  180s
+  60s
+  600s
+  180s
+  60s
+  600s
 )
 
 COLLECT_INSTANCE_METRICS="${COLLECT_INSTANCE_METRICS:-true}"
@@ -177,14 +210,19 @@ SSH_RETRY_ATTEMPTS="${SSH_RETRY_ATTEMPTS:-3}"
 SSH_RETRY_DELAY_SECONDS="${SSH_RETRY_DELAY_SECONDS:-5}"
 DURATION_OVERRIDE=""
 MACHINE_PRESET="${MACHINE_PRESET:-middle-east}"
+VIETNAM_USERS_K="${VIETNAM_USERS_K:-}"
 START_FLOW_NAME="${START_FLOW_NAME:-}"
 START_FLOW_INDEX=0
+REGION_MACHINE_COUNT_OVERRIDE="${REGION_MACHINE_COUNT_OVERRIDE:-}"
 INSTANCE_METRICS_MACHINES_OVERRIDE="${INSTANCE_METRICS_MACHINES_OVERRIDE:-}"
 CUSTOM_FLOW_NAME="${CUSTOM_FLOW_NAME:-}"
 CUSTOM_FLOW_ID="${CUSTOM_FLOW_ID:-}"
 CUSTOM_FLOW_API_COUNT="${CUSTOM_FLOW_API_COUNT:-}"
 CUSTOM_FLOW_DURATION="${CUSTOM_FLOW_DURATION:-}"
 CUSTOM_FLOW_RPS_WORKERS="${CUSTOM_FLOW_RPS_WORKERS:-0}"
+FEED_BASE_URL="${FEED_BASE_URL:-https://dev-api.loco.com/fd/}"
+FEED_MIN_RESPONSE_BYTES="${FEED_MIN_RESPONSE_BYTES:-6144}"
+FEED_CACHE_KEY="${FEED_CACHE_KEY:-}"
 MACHINES=()
 
 usage() {
@@ -207,18 +245,32 @@ Metric flags:
 
 Run flags:
   --duration 120s                Override all per-flow durations and recalculate regional RPS.
+  --region-machine-count 4       Divide regional RPS as if this many same-region machines are active.
+                                  Useful when only one machine is available but you want 1/N load.
   --run-id api_coverage_manual   Override RUN_ID.
   --start-flow stream_pre_soak    Resume from this flow name and skip earlier flows.
   --flow-id 81                   Run only this single flow ID instead of the default flow list.
   --api-count 4                  API calls in --flow-id. Required with --flow-id.
   --flow-name custom_flow_81      Optional name for --flow-id. Default: flow_<id>.
   --flow-duration 180s            Optional duration for --flow-id. Default: --duration or DEFAULT_DURATION.
+  --feed-v5-webhome               Run only the named Feed v5 webhome flow (FLOW_ID=91, API count=1).
   --preset middle-east           Use a saved machine set. Default: middle-east.
-                                  Presets: middle-east, test1, brazil-turkey, test2, core-p0.
+                                  Presets: middle-east, september-new, brazil-active,
+                                  test1, brazil-turkey, test2, core-p0.
   --test 1                       Alias for --preset test1 (Brazil + Turkey).
   --test 2                       Alias for --preset test2 (Brazil + Turkey + Philippines + Saudi + Egypt).
   --machines "load-test-brazil-lightnode-01 load-test-turkey-01"
                                   Override machines directly. RPS is calculated from each machine's region.
+
+Vietnam:
+  Set VIETNAM_USERS_K to the Vietnam regional user target before selecting a
+  Vietnam machine. No default is used, to prevent accidental load.
+
+Feed v5 environment:
+  FEED_BASE_URL                    Default: https://dev-api.loco.com/fd/
+  FEED_MIN_RESPONSE_BYTES          Default: 6144
+  FEED_CACHE_KEY                   Optional. Not sent when empty or unset.
+  Authentication is generated by the load-test repository; no static token is passed.
 
 Environment overrides still work:
   MACHINE_PRESET=test2 DEFAULT_DURATION=60s COLLECT_K8S_METRICS=true ./scripts/run-test-v6.sh
@@ -229,6 +281,7 @@ Examples:
   ./scripts/run-test-v6.sh --no-k8s --test 1
   ./scripts/run-test-v6.sh --no-k8s --test 2
   ./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --flow-id 81 --api-count 4 --flow-duration 180s
+  FEED_BASE_URL=https://qa-api.loco.com/fd/ ./scripts/run-test-v6.sh --no-k8s --no-dstat --feed-v5-webhome --test 2
   ./scripts/run-test-v6.sh --no-k8s --dry-run
   ./scripts/run-test-v6.sh --no-k8s --test 2 --dstat-machines "load-test-brazil-lightnode-01 load-test-turkey-01"
   ./scripts/run-test-v6.sh --no-k8s --no-dstat --test 1 --run-id regional_api_coverage_v6_20260612_163047 --start-flow stream_pre_soak
@@ -259,10 +312,38 @@ set_bool_from_value() {
     printf -v "$var_name" '%s' "$parsed_value"
 }
 
+build_remote_feed_env_command() {
+    local command="env"
+    local quoted_value
+
+    if [ -z "$FEED_CACHE_KEY" ]; then
+        command+=" -u FEED_CACHE_KEY"
+    fi
+
+    printf -v quoted_value '%q' "$FEED_BASE_URL"
+    command+=" FEED_BASE_URL=$quoted_value"
+
+    printf -v quoted_value '%q' "$FEED_MIN_RESPONSE_BYTES"
+    command+=" FEED_MIN_RESPONSE_BYTES=$quoted_value"
+
+    if [ -n "$FEED_CACHE_KEY" ]; then
+        printf -v quoted_value '%q' "$FEED_CACHE_KEY"
+        command+=" FEED_CACHE_KEY=$quoted_value"
+    fi
+
+    printf '%s\n' "$command"
+}
+
 preset_machines() {
     case "$1" in
         middle-east|me|gcc-levant)
             printf '%s\n' 'load-test-iraq-01 load-test-bahrain-01 load-test-qatar-01 load-test-kuwait-01'
+            ;;
+        september-new|new-machines|vietnam-turkey-new)
+            printf '%s\n' 'load-test-vietnam-01 load-test-vietnam-02 load-test-turkey-01 load-test-turkey-02'
+            ;;
+        brazil-active|active-brazil|brazil-lightnode-01)
+            printf '%s\n' 'load-test-brazil-lightnode-01'
             ;;
         test1|brazil-turkey)
             printf '%s\n' 'load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03'
@@ -291,7 +372,7 @@ apply_machine_preset() {
     preset_value="$(preset_machines "$preset" || true)"
     if [ -z "$preset_value" ]; then
         echo "Unknown preset: $preset"
-        echo "Supported presets: middle-east, test1, brazil-turkey, test2, core-p0"
+        echo "Supported presets: middle-east, september-new, brazil-active, test1, brazil-turkey, test2, core-p0"
         exit 1
     fi
 
@@ -302,6 +383,7 @@ machine_region_key() {
     case "$1" in
         brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04) printf '%s\n' 'brazil' ;;
         turkey-01|turkey-02|turkey-03|load-test-turkey-01|load-test-turkey-02|load-test-turkey-03) printf '%s\n' 'turkey' ;;
+        vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02) printf '%s\n' 'vietnam' ;;
         philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03) printf '%s\n' 'philippines' ;;
         saudi-01|saudi-02|saudi-03|load-test-saudi-01|load-test-saudi-02|load-test-saudi-03) printf '%s\n' 'saudi' ;;
         egypt-01|egypt-02|egypt-03|load-test-egypt-01|load-test-egypt-02|load-test-egypt-03) printf '%s\n' 'egypt' ;;
@@ -317,6 +399,7 @@ region_label() {
     case "$1" in
         brazil) printf '%s\n' 'Brazil' ;;
         turkey) printf '%s\n' 'Turkey' ;;
+        vietnam) printf '%s\n' 'Vietnam' ;;
         philippines) printf '%s\n' 'Philippines' ;;
         saudi) printf '%s\n' 'Saudi' ;;
         egypt) printf '%s\n' 'Egypt' ;;
@@ -332,7 +415,14 @@ region_users_k() {
     case "$1" in
         brazil) printf '%s\n' '79.5' ;;
         turkey) printf '%s\n' '55' ;;
-        philippines) printf '%s\n' '18' ;;
+        vietnam)
+            if [ -z "$VIETNAM_USERS_K" ]; then
+                echo "VIETNAM_USERS_K is required when selecting Vietnam machines" >&2
+                return 1
+            fi
+            printf '%s\n' "$VIETNAM_USERS_K"
+            ;;
+        philippines) printf '%s\n' '55' ;;
         saudi) printf '%s\n' '22.5' ;;
         egypt) printf '%s\n' '13.5' ;;
         iraq) printf '%s\n' '7.2' ;;
@@ -363,6 +453,11 @@ selected_region_machine_count() {
     local selected_machine
     local selected_region_key
     local count=0
+
+    if [ -n "$REGION_MACHINE_COUNT_OVERRIDE" ]; then
+        printf '%s\n' "$REGION_MACHINE_COUNT_OVERRIDE"
+        return 0
+    fi
 
     target_region_key="$(machine_region_key "$machine")" || return 1
 
@@ -509,7 +604,7 @@ print_regional_target_plan() {
     local flow_index
     local flow_name
 
-    if [ "${#FLOW_IDS[@]}" -ne 21 ]; then
+    if [ "${#FLOW_IDS[@]}" -ne 27 ]; then
         echo "Selected flow target RPS:"
         for machine in "${MACHINES[@]}"
         do
@@ -544,7 +639,7 @@ print_regional_target_plan() {
             continue
         fi
 
-        echo "  $machine region=\"$region_label\" users=${users_k}k region_machines=$region_machine_count auth=$(regional_target_triplet "$machine" 0) feed=$(regional_target_triplet "$machine" 3) stream=$(regional_target_triplet "$machine" 6) chat=$(regional_target_triplet "$machine" 9) quest_rewards=$(regional_target_triplet "$machine" 12) leaderboard=$(regional_target_triplet "$machine" 15) search=$(regional_target_triplet "$machine" 18)"
+        echo "  $machine region=\"$region_label\" users=${users_k}k region_machines=$region_machine_count auth=$(regional_target_triplet "$machine" 0) feed=$(regional_target_triplet "$machine" 3) stream=$(regional_target_triplet "$machine" 6) chat=$(regional_target_triplet "$machine" 9) quest_rewards=$(regional_target_triplet "$machine" 12) leaderboard=$(regional_target_triplet "$machine" 15) search=$(regional_target_triplet "$machine" 18) flow_83=$(regional_target_triplet "$machine" 21) feed_v5_webhome=$(regional_target_triplet "$machine" 24)"
     done
     echo "Machine-local target RPS after same-region split (pre/burst/soak):"
     for machine in "${MACHINES[@]}"
@@ -558,7 +653,7 @@ print_regional_target_plan() {
             continue
         fi
 
-        echo "  $machine region=\"$region_label\" users=${users_k}k region_machines=$region_machine_count auth=$(local_target_triplet "$machine" 0) feed=$(local_target_triplet "$machine" 3) stream=$(local_target_triplet "$machine" 6) chat=$(local_target_triplet "$machine" 9) quest_rewards=$(local_target_triplet "$machine" 12) leaderboard=$(local_target_triplet "$machine" 15) search=$(local_target_triplet "$machine" 18)"
+        echo "  $machine region=\"$region_label\" users=${users_k}k region_machines=$region_machine_count auth=$(local_target_triplet "$machine" 0) feed=$(local_target_triplet "$machine" 3) stream=$(local_target_triplet "$machine" 6) chat=$(local_target_triplet "$machine" 9) quest_rewards=$(local_target_triplet "$machine" 12) leaderboard=$(local_target_triplet "$machine" 15) search=$(local_target_triplet "$machine" 18) flow_83=$(local_target_triplet "$machine" 21) feed_v5_webhome=$(local_target_triplet "$machine" 24)"
     done
     echo "Remote TARGET_RPS is local target RPS multiplied by LoadGenerators=$LOAD_GENERATORS so the Go runner split preserves these machine-local targets."
 }
@@ -655,6 +750,18 @@ do
             DEFAULT_DURATION="${1#*=}"
             DURATION_OVERRIDE="${1#*=}"
             ;;
+        --region-machine-count|--regional-machine-count|--rps-region-machine-count)
+            if [ "$#" -lt 2 ]; then
+                echo "--region-machine-count requires a value"
+                exit 1
+            fi
+            REGION_MACHINE_COUNT_OVERRIDE="$2"
+            shift 2
+            continue
+            ;;
+        --region-machine-count=*|--regional-machine-count=*|--rps-region-machine-count=*)
+            REGION_MACHINE_COUNT_OVERRIDE="${1#*=}"
+            ;;
         --run-id)
             if [ "$#" -lt 2 ]; then
                 echo "--run-id requires a value"
@@ -739,6 +846,11 @@ do
         --flow-workers=*|--custom-flow-workers=*)
             CUSTOM_FLOW_RPS_WORKERS="${1#*=}"
             ;;
+        --feed-v5-webhome)
+            CUSTOM_FLOW_ID="91"
+            CUSTOM_FLOW_API_COUNT="1"
+            CUSTOM_FLOW_NAME="feed_v5_webhome"
+            ;;
         --preset|--machine-preset)
             if [ "$#" -lt 2 ]; then
                 echo "--preset requires a value"
@@ -806,6 +918,32 @@ set_bool_from_value COLLECT_K8S_METRICS "$COLLECT_K8S_METRICS" "COLLECT_K8S_METR
 set_bool_from_value GENERATE_CSV_REPORT "$GENERATE_CSV_REPORT" "GENERATE_CSV_REPORT"
 set_bool_from_value DRY_RUN "$DRY_RUN" "DRY_RUN"
 
+if [ -n "$REGION_MACHINE_COUNT_OVERRIDE" ] && \
+    { ! [[ "$REGION_MACHINE_COUNT_OVERRIDE" =~ ^[0-9]+$ ]] || [ "$REGION_MACHINE_COUNT_OVERRIDE" -le 0 ]; }
+then
+    echo "--region-machine-count must be a positive integer: $REGION_MACHINE_COUNT_OVERRIDE"
+    exit 1
+fi
+
+if [ -n "$VIETNAM_USERS_K" ]; then
+    if ! [[ "$VIETNAM_USERS_K" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+        ! awk -v users_k="$VIETNAM_USERS_K" 'BEGIN { exit !(users_k > 0) }'
+    then
+        echo "VIETNAM_USERS_K must be a positive number: $VIETNAM_USERS_K"
+        exit 1
+    fi
+fi
+
+if [ -z "$FEED_BASE_URL" ]; then
+    echo "FEED_BASE_URL must not be empty"
+    exit 1
+fi
+
+if ! [[ "$FEED_MIN_RESPONSE_BYTES" =~ ^[0-9]+$ ]] || [ "$FEED_MIN_RESPONSE_BYTES" -le 0 ]; then
+    echo "FEED_MIN_RESPONSE_BYTES must be a positive integer: $FEED_MIN_RESPONSE_BYTES"
+    exit 1
+fi
+
 if [ -n "$CUSTOM_FLOW_ID" ] || [ -n "$CUSTOM_FLOW_API_COUNT" ] || [ -n "$CUSTOM_FLOW_NAME" ] || [ -n "$CUSTOM_FLOW_DURATION" ]; then
     if [ -z "$CUSTOM_FLOW_ID" ]; then
         echo "--flow-id is required for custom single-flow mode"
@@ -842,6 +980,13 @@ if [ -n "$CUSTOM_FLOW_ID" ] || [ -n "$CUSTOM_FLOW_API_COUNT" ] || [ -n "$CUSTOM_
     FLOW_RPS_WORKERS=("$CUSTOM_FLOW_RPS_WORKERS")
     FLOW_DURATIONS=("$CUSTOM_FLOW_DURATION")
     DURATION_OVERRIDE=""
+fi
+
+REMOTE_FEED_ENV_COMMAND="$(build_remote_feed_env_command)"
+if [ -n "$FEED_CACHE_KEY" ]; then
+    FEED_CACHE_KEY_CONFIGURED="true"
+else
+    FEED_CACHE_KEY_CONFIGURED="false"
 fi
 
 RUN_ID="${RUN_ID:-${SCRIPT_VERSION}_$(date +%Y%m%d_%H%M%S)}"
@@ -1101,6 +1246,12 @@ if [ -n "$START_FLOW_NAME" ]; then
 fi
 echo "Machines=$MACHINES_OVERRIDE_VALUE"
 echo "LoadGenerators=$LOAD_GENERATORS"
+echo "FeedBaseURL=$FEED_BASE_URL"
+echo "FeedMinResponseBytes=$FEED_MIN_RESPONSE_BYTES"
+echo "FeedCacheKeyConfigured=$FEED_CACHE_KEY_CONFIGURED"
+if [ -n "$REGION_MACHINE_COUNT_OVERRIDE" ]; then
+    echo "RegionMachineCountOverride=$REGION_MACHINE_COUNT_OVERRIDE"
+fi
 if [ "$COLLECT_INSTANCE_METRICS" != "false" ]; then
     echo "Instance metrics will be saved under:"
     echo "$METRICS_DIR"
@@ -1331,6 +1482,9 @@ do
             echo 'StreamUID=$STREAM_UID' >> \$SUMMARY_FILE
             echo 'StreamerUID=$STREAMER_UID' >> \$SUMMARY_FILE
             echo 'RunID=$flow_run_id' >> \$SUMMARY_FILE
+            echo 'FeedBaseURL=$FEED_BASE_URL' >> \$SUMMARY_FILE
+            echo 'FeedMinResponseBytes=$FEED_MIN_RESPONSE_BYTES' >> \$SUMMARY_FILE
+            echo 'FeedCacheKeyConfigured=$FEED_CACHE_KEY_CONFIGURED' >> \$SUMMARY_FILE
             echo 'StartTimeIST='\$START_TIME >> \$SUMMARY_FILE
 
             export PATH=/usr/local/go/bin:/usr/lib/go-1.22/bin:\$HOME/go/bin:/root/go/bin:\$PATH
@@ -1345,6 +1499,7 @@ do
             echo 'GoBinary='\$GO_BIN >> \$SUMMARY_FILE
             echo 'GoVersion='\"\$(go version)\" >> \$SUMMARY_FILE
 
+            $REMOTE_FEED_ENV_COMMAND \
             MODE=rps \
             RUN_ID=$flow_run_id \
             STREAM_UID=$STREAM_UID \

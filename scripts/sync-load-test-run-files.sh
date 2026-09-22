@@ -43,6 +43,12 @@ DEFAULT_FLOWS=(
   search_pre_soak
   search_burst
   search_soak
+  flow_83_pre_soak
+  flow_83_burst
+  flow_83_soak
+  feed_v5_webhome_pre_soak
+  feed_v5_webhome_burst
+  feed_v5_webhome_soak
 )
 
 usage() {
