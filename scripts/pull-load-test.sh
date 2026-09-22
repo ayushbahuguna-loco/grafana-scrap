@@ -19,7 +19,7 @@ preset_machines() {
             printf '%s\n' 'load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03'
             ;;
         test2|core-p0|expanded-p0)
-            printf '%s\n' 'load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03 load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-saudi-01 load-test-saudi-02 load-test-saudi-03 load-test-egypt-01 load-test-egypt-02'
+            printf '%s\n' 'load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03 load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-linux-philippines-04 load-test-linux-philippines-05 load-test-saudi-01 load-test-saudi-02 load-test-saudi-03 load-test-egypt-01 load-test-egypt-02'
             ;;
         *)
             return 1

@@ -45,6 +45,7 @@ assert_file_not_contains() {
 
 dry_output="$(
     ENV_FILE=/dev/null \
+    JWT_SECRET_KEY=test-jwt-secret \
     "$RUNNER" \
         --dry-run \
         --no-k8s \
@@ -59,8 +60,12 @@ assert_contains "$dry_output" "flow=feed_v5_webhome flow_id=91 api_count=1"
 assert_contains "$dry_output" "FeedBaseURL=https://dev-api.loco.com/fd/"
 assert_contains "$dry_output" "FeedMinResponseBytes=6144"
 assert_contains "$dry_output" "FeedCacheKeyConfigured=false"
+assert_contains "$dry_output" "StreamUID=708c22e6-040f-493d-b795-d471d528a1e4"
+assert_contains "$dry_output" "StreamerUID=4UYUL1EPDA"
+assert_contains "$dry_output" "Leaderboard=550ebc65-7e08-43af-98d5-f26b62c4a94e"
+assert_contains "$dry_output" "PrintApiResponse=true"
 
-if ENV_FILE=/dev/null FEED_MIN_RESPONSE_BYTES=invalid \
+if ENV_FILE=/dev/null JWT_SECRET_KEY=test-jwt-secret FEED_MIN_RESPONSE_BYTES=invalid \
     "$RUNNER" --dry-run --no-metrics --no-csv --machines load-test-turkey-01 --feed-v5-webhome \
     >"$TMP_DIR/invalid-minimum.log" 2>&1
 then
@@ -123,6 +128,7 @@ run_captured() {
     FEED_BASE_URL="$feed_base_url" \
     FEED_MIN_RESPONSE_BYTES="$feed_minimum" \
     FEED_CACHE_KEY="$feed_cache_key" \
+    JWT_SECRET_KEY=test-jwt-secret \
     "$RUNNER" \
         --no-k8s \
         --no-dstat \
@@ -144,6 +150,9 @@ run_captured \
 assert_file_contains "$DEFAULT_CAPTURE" "FLOW_ID=91"
 assert_file_contains "$DEFAULT_CAPTURE" "FEED_BASE_URL=https://dev-api.loco.com/fd/"
 assert_file_contains "$DEFAULT_CAPTURE" "FEED_MIN_RESPONSE_BYTES=6144"
+assert_file_contains "$DEFAULT_CAPTURE" "JWT_SECRET_KEY=test-jwt-secret"
+assert_file_contains "$DEFAULT_CAPTURE" "PRINT_API_RESPONSE=true"
+assert_file_contains "$DEFAULT_CAPTURE" "leaderboard=550ebc65-7e08-43af-98d5-f26b62c4a94e"
 assert_file_contains "$DEFAULT_CAPTURE" "env -u FEED_CACHE_KEY"
 assert_file_not_contains "$DEFAULT_CAPTURE" "FEED_CACHE_KEY="
 

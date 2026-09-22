@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$REPO_ROOT" || exit 1
 
-MACHINES="${MACHINES:-load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03}"
+MACHINES="${MACHINES:-load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-linux-philippines-04 load-test-linux-philippines-05}"
 RUN_ID="${RUN_ID:-philippines_single_api_flows_$(date +%Y%m%d_%H%M%S)}"
 DRY_RUN="${DRY_RUN:-false}"
 GENERATE_FINAL_CSV="${GENERATE_FINAL_CSV:-true}"

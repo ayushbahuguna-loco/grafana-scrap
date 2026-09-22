@@ -36,8 +36,11 @@ For the most stable run, skip Kubernetes metrics and dstat:
 |---|---|
 | `./scripts/run-test-v6.sh --no-k8s --test 2` | Runs the current 270.5k-user regional test across Brazil, Turkey, Philippines, Saudi, and Egypt. Keeps dstat on, skips Kubernetes metrics. |
 | `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2` | Runs the same 270.5k-user test without Kubernetes metrics or dstat. Use this when metrics are failing or you only need load-test logs and CSVs. |
-| `./scripts/run-philippines-core-flows.sh --profile core` | Runs flows 76, 77, 90, and 79 on the three Philippines machines for the 100k-user regional target, using 1-minute pre-soak, 2-minute burst, and 3-minute soak phases. |
-| `./scripts/run-philippines-core-flows.sh --profile all` | Runs flows 41, 76, 77, 78, 79, 80, 82, 83, and 90 on the three Philippines machines, using 4-minute pre-soak, 2-minute burst, and 15-minute soak phases. |
+| `./scripts/run-philippines-core-flows.sh --profile core` | Runs flows 76, 77, 90, and 79 on the five Philippines machines for the 100k-user regional target, using 1-minute pre-soak, 2-minute burst, and 3-minute soak phases. |
+| `./scripts/run-philippines-core-flows.sh --profile all` | Runs flows 41, 76, 77, 78, 79, 80, 82, 83, and 90 on the five Philippines machines, using 4-minute pre-soak, 2-minute burst, and 15-minute soak phases. |
+| `./scripts/run-philippines-core-flows.sh --profile core --users-k 25` | Runs the smaller core-profile test against a 25k-user Philippines target. Omit `--users-k` to return to the 100k default. |
+| `./scripts/run-philippines-core-flows.sh --profile smoke --no-k8s` | Runs one 10-second phase for each of the nine flows with 100 users and no Kubernetes monitoring. |
+| `./scripts/run-philippines-core-flows.sh --profile smoke --flows "76 78 79" --no-k8s` | Reruns one 10-second phase for only the previously failed auth, stream, and chat flows. |
 | `./scripts/run-test-v6.sh --dry-run --no-k8s --no-dstat --test 2` | Prints selected machines, flows, durations, and calculated RPS. Does not SSH or run load. Use before a real test. |
 | `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --duration 30s` | Short smoke test. Overrides every flow duration to 30 seconds, which increases calculated RPS. Use only for validation, not final numbers. |
 | `./scripts/run-test-v6.sh --no-k8s --no-dstat --preset brazil-active --start-flow flow_83_pre_soak` | Runs the default flow 83 pre-soak, burst, and soak phases on the active Brazil machine. |
@@ -47,7 +50,7 @@ For the most stable run, skip Kubernetes metrics and dstat:
 | `./scripts/run-test-v6.sh --k8s --test 2` | Runs the 270.5k-user test and also starts Kubernetes metrics. Use only when `ssh my-machine` and `kubectl` are healthy. |
 | `./scripts/run-test-v6.sh --no-k8s --no-csv --test 2` | Runs load but skips final CSV generation. Use only when debugging raw logs. |
 | `RUN_ID=my_debug_run ./scripts/run-test-v6.sh --no-k8s --test 2` | Uses a fixed run id instead of generating one. Useful for controlled reruns. |
-| `STREAM_UID=<stream_uid> STREAMER_UID=<streamer_uid> ./scripts/run-test-v6.sh --no-k8s --test 2` | Overrides the stream and streamer used by flows that need them. |
+| `STREAM_UID=<stream_uid> STREAMER_UID=<streamer_uid> leaderboard=<leaderboard_id> ./scripts/run-test-v6.sh --no-k8s --test 2` | Overrides the stream, streamer, and leaderboard used by flows that need them. |
 | `RPS_DRAIN_TIMEOUT=60s ./scripts/run-test-v6.sh --no-k8s --test 2` | Gives the remote runner more drain time after each flow. |
 
 ## Region Commands
@@ -63,7 +66,7 @@ The script calculates RPS from the region attached to each machine. Use
 | Middle East preset | `./scripts/run-test-v6.sh --no-k8s --preset middle-east` |
 | Brazil only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04"` |
 | Turkey only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-turkey-01 load-test-turkey-02 load-test-turkey-03"` |
-| Philippines only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03"` |
+| Philippines only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-linux-philippines-04 load-test-linux-philippines-05"` |
 | Saudi only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-saudi-01 load-test-saudi-02 load-test-saudi-03"` |
 | Egypt only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-egypt-01 load-test-egypt-02"` |
 | Iraq only | `./scripts/run-test-v6.sh --no-k8s --machines "load-test-iraq-01"` |
@@ -77,7 +80,7 @@ Known region user targets:
 |---|---:|---|
 | Brazil | 79.5k | `load-test-brazil-lightnode-01..04` |
 | Turkey | 55k | `load-test-turkey-01..03` |
-| Philippines | 100k | `load-test-linux-philippines-01..03` |
+| Philippines | 100k | `load-test-linux-philippines-01..05` |
 | Saudi | 22.5k | `load-test-saudi-01..03` |
 | Egypt | 13.5k | `load-test-egypt-01..02` |
 | Iraq | 7.2k | `load-test-iraq-01` |
@@ -153,6 +156,20 @@ Feed configuration:
 | `FEED_BASE_URL` | `https://dev-api.loco.com/fd/` | Feed service base URL passed to `run-direct.sh`. |
 | `FEED_MIN_RESPONSE_BYTES` | `6144` | Minimum successful response size in bytes. Must be a positive integer. |
 | `FEED_CACHE_KEY` | unset | Optional cache key. It is not passed to the remote process when empty or unset. |
+
+All v6 load tests require `JWT_SECRET_KEY` in the local `.env`. The runner
+passes it to the remote `run-direct.sh` process without writing its value to
+the console or summary files. Philippines machines use
+`load-test-linux-philippines-01 (1).pem` by default.
+
+Current flow inputs are:
+
+| Variable | Default |
+|---|---|
+| `STREAM_UID` | `708c22e6-040f-493d-b795-d471d528a1e4` |
+| `STREAMER_UID` | `4UYUL1EPDA` |
+| `leaderboard` | `550ebc65-7e08-43af-98d5-f26b62c4a94e` |
+| `PRINT_API_RESPONSE` | `true` |
 
 Run only Feed v5 against QA:
 
@@ -291,7 +308,7 @@ Sync all default flows for the 270.5k test:
 
 ```bash
 scripts/sync-load-test-run-files.sh <RUN_ID> \
-  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03 load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-saudi-01 load-test-saudi-02 load-test-saudi-03 load-test-egypt-01 load-test-egypt-02"
+  --machines "load-test-brazil-lightnode-01 load-test-brazil-lightnode-02 load-test-brazil-lightnode-03 load-test-brazil-lightnode-04 load-test-turkey-01 load-test-turkey-02 load-test-turkey-03 load-test-linux-philippines-01 load-test-linux-philippines-02 load-test-linux-philippines-03 load-test-linux-philippines-04 load-test-linux-philippines-05 load-test-saudi-01 load-test-saudi-02 load-test-saudi-03 load-test-egypt-01 load-test-egypt-02"
 ```
 
 Sync only a few flows:

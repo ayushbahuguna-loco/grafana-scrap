@@ -11,9 +11,11 @@ machine_host() {
         brazil-02|load-test-brazil-lightnode-02) printf '%s\n' '15.229.156.10' ;;
         brazil-03|load-test-brazil-lightnode-03) printf '%s\n' '56.124.115.213' ;;
         brazil-04|load-test-brazil-lightnode-04) printf '%s\n' '15.228.91.56' ;;
-        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.146.216' ;;
-        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.146.214' ;;
-        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.146.26' ;;
+        philippines-01|load-test-linux-philippines-01) printf '%s\n' '96.0.145.78' ;;
+        philippines-02|load-test-linux-philippines-02) printf '%s\n' '96.0.146.181' ;;
+        philippines-03|load-test-linux-philippines-03) printf '%s\n' '96.0.145.155' ;;
+        philippines-04|load-test-linux-philippines-04) printf '%s\n' '96.0.144.23' ;;
+        philippines-05|load-test-linux-philippines-05) printf '%s\n' '96.0.146.78' ;;
         turkey-01|load-test-turkey-01) printf '%s\n' '130.94.0.175' ;;
         turkey-02|load-test-turkey-02) printf '%s\n' '130.94.1.122' ;;
         turkey-03|load-test-turkey-03) printf '%s\n' '38.60.255.62' ;;
@@ -35,7 +37,7 @@ machine_host() {
 
 machine_user() {
     case "$1" in
-        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03|vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02) printf '%s\n' 'ec2-user' ;;
+        philippines-01|philippines-02|philippines-03|philippines-04|philippines-05|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03|load-test-linux-philippines-04|load-test-linux-philippines-05|vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02) printf '%s\n' 'ec2-user' ;;
         brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04) printf '%s\n' 'ubuntu' ;;
         *) printf '%s\n' 'root' ;;
     esac
@@ -53,8 +55,8 @@ machine_identity_file() {
         brazil-01|brazil-02|brazil-03|brazil-04|load-test-brazil-lightnode-01|load-test-brazil-lightnode-02|load-test-brazil-lightnode-03|load-test-brazil-lightnode-04)
             resolve_repo_path "${BRAZIL_SSH_KEY:-load-test-brazil-set.pem}"
             ;;
-        philippines-01|philippines-02|philippines-03|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03)
-            resolve_repo_path "${PHILIPPINES_SSH_KEY:-load-test-vietnam-1-sept.pem}"
+        philippines-01|philippines-02|philippines-03|philippines-04|philippines-05|load-test-linux-philippines-01|load-test-linux-philippines-02|load-test-linux-philippines-03|load-test-linux-philippines-04|load-test-linux-philippines-05)
+            resolve_repo_path "${PHILIPPINES_SSH_KEY:-load-test-linux-philippines-01 (1).pem}"
             ;;
         vietnam-01|vietnam-02|load-test-vietnam-01|load-test-vietnam-02)
             resolve_repo_path "${VIETNAM_SSH_KEY:-load-test-vietnam-1-sept.pem}"
