@@ -25,7 +25,7 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 #   Brazil:        79.5k users  -> load-test-brazil-lightnode-01..04
 #   Turkey:        55k users    -> load-test-turkey-01..03
 #   Vietnam:       VIETNAM_USERS_K -> load-test-vietnam-01..02
-#   Philippines:   55k users    -> load-test-linux-philippines-01..03
+#   Philippines:   100k users   -> load-test-linux-philippines-01..03
 #   Saudi:         22.5k users  -> saudi-01..03 / load-test-saudi-01..03
 #   Egypt:         13.5k users  -> egypt-01..02 / load-test-egypt-01..02
 #   Iraq:          7.2k users   -> load-test-iraq-01
@@ -38,7 +38,7 @@ STREAMER_UID="${STREAMER_UID:-2L6YZ1RZU0}"
 # API calls per flow:
 #   41 leaderboard   = 5
 #   76 auth          = 7
-#   77 feed          = 6
+#   77 feed          = 5
 #   78 stream        = 6
 #   79 chat          = 3
 #   80 quest_rewards = 2
@@ -114,9 +114,9 @@ FLOW_API_COUNTS=(
   7
   7
   7
-  6
-  6
-  6
+  5
+  5
+  5
   1
   1
   1
@@ -422,7 +422,7 @@ region_users_k() {
             fi
             printf '%s\n' "$VIETNAM_USERS_K"
             ;;
-        philippines) printf '%s\n' '55' ;;
+        philippines) printf '%s\n' '100' ;;
         saudi) printf '%s\n' '22.5' ;;
         egypt) printf '%s\n' '13.5' ;;
         iraq) printf '%s\n' '7.2' ;;
