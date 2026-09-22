@@ -18,6 +18,7 @@ DRY_RUN="${DRY_RUN:-false}"
 GENERATE_FINAL_CSV="${GENERATE_FINAL_CSV:-true}"
 COLLECT_K8S_METRICS="${COLLECT_K8S_METRICS:-false}"
 FLOW_FILTER="${FLOW_FILTER:-}"
+TIME_OVERRIDE="${TIME_OVERRIDE:-}"
 
 usage() {
     cat <<'EOF'
@@ -47,6 +48,8 @@ Flags:
   --users-k NUMBER  Set the Philippines regional user target in thousands. Default: 100.
                      The smoke profile defaults to 0.1 (100 users).
   --flows "76 78"   Run only these flow IDs from the selected profile.
+  --time "3 2 4"    Override pre-soak, burst, and soak durations in minutes.
+                     Supported by the core and all profiles.
   --no-k8s          Disable Kubernetes monitoring. Default.
   --with-k8s        Enable Kubernetes monitoring for each phase.
   --run-id ID       Use a fixed RUN_ID. Default: philippines_<profile>_flows_<timestamp>
@@ -106,6 +109,18 @@ while [ "$#" -gt 0 ]; do
             FLOW_FILTER="${1#*=}"
             shift
             ;;
+        --time)
+            if [ "$#" -lt 2 ]; then
+                echo "--time requires three quoted minute values: PRE_SOAK BURST SOAK"
+                exit 1
+            fi
+            TIME_OVERRIDE="$2"
+            shift 2
+            ;;
+        --time=*)
+            TIME_OVERRIDE="${1#*=}"
+            shift
+            ;;
         --no-k8s)
             COLLECT_K8S_METRICS="false"
             shift
@@ -157,6 +172,24 @@ if [ "$USERS_K_EXPLICIT" = "false" ]; then
         USERS_K="0.1"
     else
         USERS_K="100"
+    fi
+fi
+
+if [ -n "$TIME_OVERRIDE" ]; then
+    if [ "$PROFILE" = "smoke" ]; then
+        echo "--time is not supported by the single-phase smoke profile"
+        echo "Use --profile core or --profile all"
+        exit 1
+    fi
+
+    read -r PRE_SOAK_MINUTES BURST_MINUTES SOAK_MINUTES EXTRA_TIME_VALUE <<< "$TIME_OVERRIDE"
+    if [ -n "${EXTRA_TIME_VALUE:-}" ] || \
+        ! [[ "${PRE_SOAK_MINUTES:-}" =~ ^[0-9]+$ ]] || [ "$PRE_SOAK_MINUTES" -le 0 ] || \
+        ! [[ "${BURST_MINUTES:-}" =~ ^[0-9]+$ ]] || [ "$BURST_MINUTES" -le 0 ] || \
+        ! [[ "${SOAK_MINUTES:-}" =~ ^[0-9]+$ ]] || [ "$SOAK_MINUTES" -le 0 ]
+    then
+        echo "--time must contain exactly three positive whole-minute values: PRE_SOAK BURST SOAK"
+        exit 1
     fi
 fi
 
@@ -318,15 +351,29 @@ echo "KubernetesMetrics=$COLLECT_K8S_METRICS"
 if [ -n "$FLOW_FILTER" ]; then
     echo "FlowFilter=$FLOW_FILTER"
 fi
+if [ -n "$TIME_OVERRIDE" ]; then
+    echo "TimingOverride=${PRE_SOAK_MINUTES}m ${BURST_MINUTES}m ${SOAK_MINUTES}m"
+fi
 echo "ResultsDir=results/$RUN_ID"
 
 if [ "$PROFILE" = "core" ]; then
-    run_selected_flow 76 auth 7 60s 120s 180s
-    run_selected_flow 77 feed 5 60s 120s 180s
-    run_selected_flow 90 stream_v2 2 60s 120s 180s
-    run_selected_flow 79 chat 3 60s 120s 180s
+    if [ -n "$TIME_OVERRIDE" ]; then
+        run_selected_flow 76 auth 7 "${PRE_SOAK_MINUTES}m" "${BURST_MINUTES}m" "${SOAK_MINUTES}m"
+        run_selected_flow 77 feed 5 "${PRE_SOAK_MINUTES}m" "${BURST_MINUTES}m" "${SOAK_MINUTES}m"
+        run_selected_flow 90 stream_v2 2 "${PRE_SOAK_MINUTES}m" "${BURST_MINUTES}m" "${SOAK_MINUTES}m"
+        run_selected_flow 79 chat 3 "${PRE_SOAK_MINUTES}m" "${BURST_MINUTES}m" "${SOAK_MINUTES}m"
+    else
+        run_selected_flow 76 auth 7 60s 120s 180s
+        run_selected_flow 77 feed 5 60s 120s 180s
+        run_selected_flow 90 stream_v2 2 60s 120s 180s
+        run_selected_flow 79 chat 3 60s 120s 180s
+    fi
 elif [ "$PROFILE" = "all" ]; then
-    run_all_flows 240s 120s 900s
+    if [ -n "$TIME_OVERRIDE" ]; then
+        run_all_flows "${PRE_SOAK_MINUTES}m" "${BURST_MINUTES}m" "${SOAK_MINUTES}m"
+    else
+        run_all_flows 240s 120s 900s
+    fi
 else
     run_smoke_flows
 fi

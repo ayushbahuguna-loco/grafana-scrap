@@ -41,6 +41,7 @@ For the most stable run, skip Kubernetes metrics and dstat:
 | `./scripts/run-philippines-core-flows.sh --profile core --users-k 25` | Runs the smaller core-profile test against a 25k-user Philippines target. Omit `--users-k` to return to the 100k default. |
 | `./scripts/run-philippines-core-flows.sh --profile smoke --no-k8s` | Runs one 10-second phase for each of the nine flows with 100 users and no Kubernetes monitoring. |
 | `./scripts/run-philippines-core-flows.sh --profile smoke --flows "76 78 79" --no-k8s` | Reruns one 10-second phase for only the previously failed auth, stream, and chat flows. |
+| `./scripts/run-philippines-core-flows.sh --profile all --time "3 2 4" --no-k8s` | Overrides the all-profile timings to 3-minute pre-soak, 2-minute burst, and 4-minute soak. |
 | `./scripts/run-test-v6.sh --dry-run --no-k8s --no-dstat --test 2` | Prints selected machines, flows, durations, and calculated RPS. Does not SSH or run load. Use before a real test. |
 | `./scripts/run-test-v6.sh --no-k8s --no-dstat --test 2 --duration 30s` | Short smoke test. Overrides every flow duration to 30 seconds, which increases calculated RPS. Use only for validation, not final numbers. |
 | `./scripts/run-test-v6.sh --no-k8s --no-dstat --preset brazil-active --start-flow flow_83_pre_soak` | Runs the default flow 83 pre-soak, burst, and soak phases on the active Brazil machine. |
